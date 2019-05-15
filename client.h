@@ -23,28 +23,4 @@ public:
     void addFile(char *data) override;
 };
 
-void ClientNode::greet() {
-
-}
-
-std::list<string> ClientNode::getList() {
-    return std::list<string>();
-}
-
-std::list<string> ClientNode::getListWith(string pattern) {
-    return std::list<string>();
-}
-
-char ClientNode::getFile(string name) {
-    return 0;
-}
-
-void ClientNode::deleteFile(string name) {
-
-}
-
-void ClientNode::addFile(char *data) {
-
-}
-
 #endif //SIK2_CLIENT_H

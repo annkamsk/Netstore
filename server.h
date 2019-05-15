@@ -1,3 +1,7 @@
+#include <utility>
+
+#include <utility>
+
 //
 // Created by anna on 14.05.19.
 //
@@ -10,9 +14,18 @@
 class ServerNode : Node {
 
 private:
-    long memory;
+    unsigned long long memory;
+    unsigned int timeout;
+    string folder;
+    vector<string> files;
 
 public:
+    ServerNode(Group group, unsigned long long memory, string folder, unsigned int timeout) :
+        Node(std::move(group)), memory(memory), folder(std::move(folder)), timeout(timeout), files(vector<string>()) {};
+
+    string getFolder() {
+        return folder;
+    }
 
     void greet() override;
 
@@ -25,6 +38,8 @@ public:
     void deleteFile(string name) override;
 
     void addFile(char *data) override;
+
+    void addFile(const string& filename, unsigned long long size);
 
 };
 
@@ -50,6 +65,11 @@ void ServerNode::deleteFile(string name) {
 
 void ServerNode::addFile(char *data) {
 
+}
+
+void ServerNode::addFile(const string& filename, unsigned long long size) {
+    files.push_back(filename);
+    memory -= size;
 }
 
 #endif //SIK2_SERVER_H

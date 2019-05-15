@@ -8,6 +8,8 @@
 
 #include <utility>
 
+#include <utility>
+
 //
 // Created by anna on 08.05.19.
 //
@@ -25,11 +27,11 @@ using std::vector;
 
 class Group {
     string MCAST_ADDR;
-    string CMD_PORT;
+    unsigned int CMD_PORT{};
 
 public:
     Group() = default;
-    Group(string mcast, string port) : MCAST_ADDR(std::move(mcast)), CMD_PORT(std::move(port)) {}
+    Group(string mcast, unsigned int port) : MCAST_ADDR(std::move(mcast)), CMD_PORT(port) {}
 };
 
 class Command {
@@ -54,6 +56,7 @@ class ComplexCommand : Command {
 };
 
 class Node {
+protected:
     Group group;
     string ip;
     int port;
@@ -61,6 +64,7 @@ class Node {
 public:
     Node(string ip, int port, Group group) : ip(std::move(ip)), port(port), group(std::move(group)) {}
     Node(string ip, int port) : ip(std::move(ip)), port(port), group(Group()) {}
+    Node(Group group) : group(std::move(group)) {};
 
 
     virtual void greet() = 0;
