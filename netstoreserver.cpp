@@ -4,12 +4,12 @@
 
 #include <iostream>
 #include <boost/program_options.hpp>
-#include <experimental/filesystem>
+#include <filesystem>
 #include "server.h"
 
 using std::string;
 namespace po = boost::program_options;
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 
 void invalid_option(const string &where, const string &val) {
     throw po::validation_error(po::validation_error::invalid_option_value,
@@ -49,7 +49,7 @@ ServerNode readOptions(int argc, char **argv) {
     }
 
     Group group(MCAST_ADDR, CMD_PORT);
-    return ServerNode(group, MAX_SPACE, SHRD_FLDR, TIMEOUT);
+    return ServerNode(group, MAX_SPACE, TIMEOUT, SHRD_FLDR);
 }
 
 int main(int argc, char *argv[]) {

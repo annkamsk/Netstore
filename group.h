@@ -62,8 +62,8 @@ protected:
     int port;
 
 public:
-    Node(string ip, int port, Group group) : ip(std::move(ip)), port(port), group(std::move(group)) {}
-    Node(string ip, int port) : ip(std::move(ip)), port(port), group(Group()) {}
+    Node(string ip, int port, Group group) : group(std::move(group)), ip(std::move(ip)), port(port)  {}
+    Node(string ip, int port) : group(Group()), ip(std::move(ip)), port(port) {}
     Node(Group group) : group(std::move(group)) {};
 
 
