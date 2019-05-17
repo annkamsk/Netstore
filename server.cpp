@@ -1,6 +1,3 @@
-//
-// Created by anna on 16.05.19.
-//
 #include <iostream>
 #include "server.h"
 
@@ -8,23 +5,22 @@ void ServerNode::greet() {
 
 }
 
-std::list<string> ServerNode::getList() {
-    return std::list<string>();
+void ServerNode::getList(Command command) {
+
 }
 
-std::list<string> ServerNode::getListWith(string pattern) {
-    return std::list<string>();
+void ServerNode::getListWith(Command command) {
 }
 
-char ServerNode::getFile(string name) {
+char ServerNode::getFile(Command command) {
     return 0;
 }
 
-void ServerNode::deleteFile(string name) {
+void ServerNode::deleteFile(Command command) {
 
 }
 
-void ServerNode::addFile(char *data) {
+void ServerNode::addFile(Command command) {
 
 }
 
@@ -32,4 +28,15 @@ void ServerNode::addFile(const string& filename, unsigned long long size) {
     files.push_back(filename);
     memory -= size;
     std::cout << filename <<std::endl;
+}
+
+void ServerNode::listen() {
+    for (;;) {
+        vector<char> buffer = this->connection.readFromSocket(Netstore::MIN_SIZE);
+        Command command(buffer);
+        if (command.isAddFile()) {
+            
+        }
+
+    }
 }

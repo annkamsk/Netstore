@@ -1,5 +1,7 @@
 #include <utility>
 
+#include <utility>
+
 
 #ifndef SIK2_GROUP_H
 #define SIK2_GROUP_H
@@ -14,11 +16,18 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/types.h>
+#include <functional>
 
 #include "err.h"
 
+#define BSIZE 1024
+
 using std::string;
 using std::vector;
+
+namespace Netstore {
+    const static int MIN_SIZE = 18;
+}
 
 class Group {
     string MCAST_ADDR;
@@ -46,18 +55,29 @@ public:
     void addToLocal();
     void detachFromGroup();
     void closeSocket();
+
+    vector<char> readFromSocket(unsigned int expectedLen);
 };
 
 class Command {
     string cmd;
-    long cmd_seq; // bigendian
-
+    long cmd_seq{}; // bigendian
     static long getSeq() {
         return 0;
     }
 
 public:
-    Command(string cmd) : cmd(std::move(cmd)), cmd_seq(getSeq()) {}
+    explicit Command(string cmd) : cmd(std::move(cmd)), cmd_seq(getSeq()) {}
+    explicit Command(vector<char> data) {
+        data.erase(remove_if(data.begin(), data.begin() + 10, [](char c) { return !isalpha(c); } ),
+                data.begin() + 10);
+        cmd = data.data();
+    }
+    bool isGreet() { return !cmd.compare("HELLO"); }
+    bool isList() { return !cmd.compare("LIST"); }
+    bool isGetFile() { return !cmd.compare("GET"); }
+    bool isDeleteFile() { return !cmd.compare("DEL"); }
+    bool isAddFile() { return !cmd.compare("ADD"); }
 };
 
 class BasicCommand : Command {
@@ -85,11 +105,11 @@ public:
     void openSocket();
     void addToLocal();
 
-    virtual void greet() = 0;
-    virtual std::list<string> getList() = 0;
-    virtual std::list<string> getListWith(string pattern) = 0;
-    virtual char getFile(string name) = 0;
-    virtual void deleteFile(string name) = 0;
+    virtual void greet(Command command) = 0;
+    virtual void getList(Command command) = 0;
+    virtual void getListWith(Command command) = 0;
+    virtual char getFile(Command command) = 0;
+    virtual void deleteFile(Command command) = 0;
     virtual void addFile(char data[]) = 0;
 };
 

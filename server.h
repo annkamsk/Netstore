@@ -29,19 +29,19 @@ public:
         return folder;
     }
 
-    void greet() override;
-
-    std::list<string> getList() override;
-
-    std::list<string> getListWith(string pattern) override;
-
-    char getFile(string name) override;
-
-    void deleteFile(string name) override;
-
-    void addFile(char *data) override;
-
     void addFile(const string& filename, unsigned long long size);
+
+    void listen();
+
+    void getList(Command command);
+
+    void getListWith(Command command);
+
+    char getFile(Command command);
+
+    void deleteFile(Command command);
+
+    void addFile(Command command);
 };
 
 #endif //SIK2_SERVER_H

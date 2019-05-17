@@ -39,6 +39,23 @@ void Connection::closeSocket() {
     close(this->sock);
 }
 
+vector<char> Connection::readFromSocket(unsigned int expectedLen) {
+    ssize_t totalLen = 0;
+    vector<char> totalBuffer;
+    while (totalLen < expectedLen) {
+        char buffer[BSIZE];
+        ssize_t singleLen = read(this->sock, buffer, sizeof buffer);
+        if (singleLen < 0) {
+            syserr("read");
+        } else {
+            totalLen += singleLen;
+            totalBuffer.insert(totalBuffer.end(), buffer, buffer + singleLen);
+            printf("read %zd bytes: %.*s\n", singleLen, (int)singleLen, buffer);
+        }
+    }
+    return totalBuffer;
+}
+
 void Node::detachFromGroup() {
     this->connection.detachFromGroup();
 }
