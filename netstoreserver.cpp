@@ -5,6 +5,7 @@
 #include <iostream>
 #include <boost/program_options.hpp>
 #include <filesystem>
+
 #include "server.h"
 
 using std::string;
@@ -17,7 +18,7 @@ void invalid_option(const string &where, const string &val) {
                                val);
 }
 
-ServerNode readOptions(int argc, char **argv) {
+void readOptions(int argc, char **argv, ServerNode &server, Group &group) {
     string MCAST_ADDR, SHRD_FLDR;
     unsigned int CMD_PORT, TIMEOUT;
     unsigned long long MAX_SPACE;
@@ -48,25 +49,37 @@ ServerNode readOptions(int argc, char **argv) {
         exit(1);
     }
 
-    Group group(MCAST_ADDR, CMD_PORT);
-    return ServerNode(group, MAX_SPACE, TIMEOUT, SHRD_FLDR);
+    group = Group(MCAST_ADDR, CMD_PORT);
+    server = ServerNode(group, MAX_SPACE, TIMEOUT, SHRD_FLDR);
 }
 
-int main(int argc, char *argv[]) {
-
-    ServerNode server = readOptions(argc, argv);
-
+void indexFiles(ServerNode server) {
     fs::path folder(server.getFolder());
 
     if (!fs::exists(folder) || !fs::is_directory(folder)) {
         std::cerr << "ERROR " << server.getFolder() << " is invalid path." << std::endl;
-        return 1;
+        exit(1);
     }
 
     for (const auto &entry : fs::directory_iterator(folder)) {
         const fs::path& file(entry.path());
         server.addFile(entry.path().filename(), fs::file_size(file));
     }
+}
+
+void syserr(const string& desc, const string& val = "") {
+    std::cerr << "ERROR " << val << desc << std::endl;
+    exit(1);
+}
+
+int main(int argc, char *argv[]) {
+    ServerNode server;
+    Group group;
+    readOptions(argc, argv, server, group);
+    indexFiles(server);
+
+    group.openSocket();
+    server.addToMcast();
 
     std::cout << "Hello, World!" << std::endl;
     return 0;

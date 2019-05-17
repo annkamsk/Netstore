@@ -1,4 +1,4 @@
-SRCS = server.cpp netstoreserver.cpp
+SRCS_SERVER = group.cpp err.cpp server.cpp netstoreserver.cpp
 
 DEPDIR := .d
 $(shell mkdir -p $(DEPDIR) >/dev/null)
@@ -19,9 +19,9 @@ POSTCOMPILE = @mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
 $(DEPDIR)/%.d: ;
 .PRECIOUS: $(DEPDIR)/%.d
 
-include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS))))
+include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS_SERVER))))
 
-server : netstoreserver.o server.o
+server : netstoreserver.o server.o group.o err.o
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
 clean:

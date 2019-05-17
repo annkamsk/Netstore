@@ -14,12 +14,13 @@
 class ServerNode : Node {
 
 private:
-    unsigned long long memory;
-    unsigned int timeout;
+    unsigned long long memory{};
+    unsigned int timeout{};
     string folder;
     vector<string> files;
 
 public:
+    ServerNode() = default;
     ServerNode(Group group, unsigned long long memory, unsigned int timeout, string folder) :
         Node(std::move(group)), memory(memory), timeout(timeout), folder(std::move(folder)), files(vector<string>()) {};
 
@@ -40,6 +41,8 @@ public:
     void addFile(char *data) override;
 
     void addFile(const string& filename, unsigned long long size);
+
+    void addToMcast();
 
 };
 
