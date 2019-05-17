@@ -37,3 +37,7 @@ void ServerNode::addFile(const string& filename, unsigned long long size) {
 void ServerNode::addToMcast() {
     this->group.addServerNodeToMcast();
 }
+
+void ServerNode::openSocket() {
+    this->group.openSocket();
+}

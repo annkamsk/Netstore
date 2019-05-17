@@ -22,7 +22,7 @@ private:
 public:
     ServerNode() = default;
     ServerNode(Group group, unsigned long long memory, unsigned int timeout, string folder) :
-        Node(std::move(group)), memory(memory), timeout(timeout), folder(std::move(folder)), files(vector<string>()) {};
+        Node(group), memory(memory), timeout(timeout), folder(std::move(folder)), files(vector<string>()) {};
 
     string getFolder() {
         return folder;
@@ -44,6 +44,7 @@ public:
 
     void addToMcast();
 
+    void openSocket();
 };
 
 #endif //SIK2_SERVER_H

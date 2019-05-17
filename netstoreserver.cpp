@@ -18,7 +18,7 @@ void invalid_option(const string &where, const string &val) {
                                val);
 }
 
-void readOptions(int argc, char **argv, ServerNode &server, Group &group) {
+ServerNode readOptions(int argc, char **argv) {
     string MCAST_ADDR, SHRD_FLDR;
     unsigned int CMD_PORT, TIMEOUT;
     unsigned long long MAX_SPACE;
@@ -49,8 +49,8 @@ void readOptions(int argc, char **argv, ServerNode &server, Group &group) {
         exit(1);
     }
 
-    group = Group(MCAST_ADDR, CMD_PORT);
-    server = ServerNode(group, MAX_SPACE, TIMEOUT, SHRD_FLDR);
+    Group group(MCAST_ADDR, CMD_PORT);
+    return ServerNode(group, MAX_SPACE, TIMEOUT, SHRD_FLDR);
 }
 
 void indexFiles(ServerNode server) {
@@ -73,12 +73,10 @@ void syserr(const string& desc, const string& val = "") {
 }
 
 int main(int argc, char *argv[]) {
-    ServerNode server;
-    Group group;
-    readOptions(argc, argv, server, group);
+    ServerNode server = readOptions(argc, argv);
     indexFiles(server);
 
-    group.openSocket();
+    server.openSocket();
     server.addToMcast();
 
     std::cout << "Hello, World!" << std::endl;
