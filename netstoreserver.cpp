@@ -78,7 +78,11 @@ int main(int argc, char *argv[]) {
 
     server.openSocket();
     server.addToMcast();
+    server.addToLocal();
 
     std::cout << "Hello, World!" << std::endl;
+    server.detachFromGroup();
+    server.closeSocket();
+
     return 0;
 }

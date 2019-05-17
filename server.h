@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include <utility>
+
 //
 // Created by anna on 14.05.19.
 //
@@ -11,7 +13,7 @@
 
 #include "group.h"
 
-class ServerNode : Node {
+class ServerNode : public Node {
 
 private:
     unsigned long long memory{};
@@ -20,9 +22,8 @@ private:
     vector<string> files;
 
 public:
-    ServerNode() = default;
     ServerNode(Group group, unsigned long long memory, unsigned int timeout, string folder) :
-        Node(group), memory(memory), timeout(timeout), folder(std::move(folder)), files(vector<string>()) {};
+        Node(std::move(group)), memory(memory), timeout(timeout), folder(std::move(folder)), files(vector<string>()) {};
 
     string getFolder() {
         return folder;
@@ -41,10 +42,6 @@ public:
     void addFile(char *data) override;
 
     void addFile(const string& filename, unsigned long long size);
-
-    void addToMcast();
-
-    void openSocket();
 };
 
 #endif //SIK2_SERVER_H

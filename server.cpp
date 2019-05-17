@@ -33,11 +33,3 @@ void ServerNode::addFile(const string& filename, unsigned long long size) {
     memory -= size;
     std::cout << filename <<std::endl;
 }
-
-void ServerNode::addToMcast() {
-    this->group.addServerNodeToMcast();
-}
-
-void ServerNode::openSocket() {
-    this->group.openSocket();
-}

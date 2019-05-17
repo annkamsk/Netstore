@@ -1,3 +1,5 @@
+#include <utility>
+
 
 #ifndef SIK2_GROUP_H
 #define SIK2_GROUP_H
@@ -21,15 +23,29 @@ using std::vector;
 class Group {
     string MCAST_ADDR;
     unsigned int CMD_PORT{};
-    int sock;
 
 public:
     Group() = default;
     Group(string mcast, unsigned int port) : MCAST_ADDR(std::move(mcast)), CMD_PORT(port) {}
+    string getMCAST_ADDR() { return this->MCAST_ADDR; }
+    unsigned int getCMD_PORT() { return this->CMD_PORT; }
+};
 
+class Connection {
+    string ip;
+    int sock{};
+    int port{};
+    struct ip_mreq ip_mreq{};
+
+
+public:
+    Connection() = default;
+    Connection(string ip, int port) : ip(std::move(ip)), port(port){}
     void openSocket();
-    void addServerNodeToMcast();
-
+    void addServerNodeToMcast(string mcast);
+    void addToLocal();
+    void detachFromGroup();
+    void closeSocket();
 };
 
 class Command {
@@ -56,14 +72,18 @@ class ComplexCommand : Command {
 class Node {
 protected:
     Group group;
-    string ip;
-    int port;
+    Connection connection;
 
 public:
     Node() = default;
-    Node(string ip, int port, Group group) : group(std::move(group)), ip(std::move(ip)), port(port)  {}
-    Node(string ip, int port) : group(Group()), ip(std::move(ip)), port(port) {}
-    Node(Group group) : group(std::move(group)) {};
+    Node(string ip, int port, Group group) : group(std::move(group)), connection(Connection(std::move(ip), port)) {}
+    explicit Node(Group group) : group(std::move(group)), connection(Connection()) {}
+
+    void detachFromGroup();
+    void closeSocket();
+    void addToMcast();
+    void openSocket();
+    void addToLocal();
 
     virtual void greet() = 0;
     virtual std::list<string> getList() = 0;
