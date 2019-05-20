@@ -1,3 +1,5 @@
+#include <utility>
+
 
 #ifndef SIK2_CONNECTION_H
 #define SIK2_CONNECTION_H
@@ -25,10 +27,38 @@ namespace Netstore {
     const static unsigned MAX_SMPL_CMD_SIZE = 274;
 }
 
+class ConnectionResponse {
+    std::vector<char> buffer{};
+    struct sockaddr_in cliaddr{};
+public:
+    ConnectionResponse() = default;
+
+    const std::vector<char> &getBuffer() const {
+        return buffer;
+    }
+
+    const char &getBufferAddr() const {
+        return buffer[0];
+    }
+
+    const sockaddr_in &getCliaddr() const {
+        return cliaddr;
+    }
+
+    void setBuffer(const std::vector<char> &buffer) {
+        ConnectionResponse::buffer = buffer;
+    }
+
+    void setCliaddr(const sockaddr_in &cliaddr) {
+        ConnectionResponse::cliaddr = cliaddr;
+    }
+
+};
+
 class IConnection {
 public:
     virtual void openSocket() = 0;
-    virtual std::vector<char> readFromSocket() = 0;
+    virtual ConnectionResponse readFromSocket() = 0;
 
 };
 class Connection : public IConnection {
@@ -54,13 +84,13 @@ public:
     UDPConnection(uint16_t port) : Connection(port){};
     void openSocket() override;
 
-    std::vector<char> readFromSocket() override;
+    ConnectionResponse readFromSocket() override;
 };
 
 class TCPConnection : public Connection {
 public:
     TCPConnection() = default;
     void openSocket() override;
-    std::vector<char> readFromSocket() override;
+    ConnectionResponse readFromSocket() override;
 };
 #endif //SIK2_CONNECTION_H

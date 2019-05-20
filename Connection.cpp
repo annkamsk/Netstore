@@ -32,18 +32,19 @@ void Connection::closeSocket() {
     close(this->sock);
 }
 
-std::vector<char> UDPConnection::readFromSocket() {
+ConnectionResponse UDPConnection::readFromSocket() {
+    ConnectionResponse response{};
     std::vector<char> buffer(Netstore::MAX_SMPL_CMD_SIZE);
-    struct sockaddr_in cliaddr{};
     socklen_t len;
-    ssize_t singleLen = recvfrom(this->sock, &buffer[0], buffer.size(), 0, (struct sockaddr *) &cliaddr, &len);
+    ssize_t singleLen = recvfrom(this->sock, &buffer[0], buffer.size(), 0, (struct sockaddr *) &response.getCliaddr(), &len);
 
     if (singleLen < 0) {
         syserr("read");
     } else {
         printf("read %zd bytes: %.*s\n", singleLen, (int) singleLen, buffer.data());
     }
-    return buffer;
+    response.setBuffer(buffer);
+    return response;
 }
 
 void UDPConnection::openSocket() {
@@ -58,6 +59,6 @@ void TCPConnection::openSocket() {
     }
 }
 
-std::vector<char> TCPConnection::readFromSocket() {
-    return std::vector<char>();
+ConnectionResponse TCPConnection::readFromSocket() {
+    return ConnectionResponse();
 }

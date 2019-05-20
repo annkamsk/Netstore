@@ -76,8 +76,8 @@ int main(int argc, char *argv[]) {
 
     auto connection = server.startConnection();
     for (;;) {
-        auto msg = connection->readFromSocket();
-        CommandBuilder().build(msg)->execute(connection);
+        auto response = connection->readFromSocket();
+        CommandBuilder().build(msg)->execute(connection, server);
     }
 
     return 0;

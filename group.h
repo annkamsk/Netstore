@@ -34,6 +34,14 @@ public:
     explicit Node(Group group) : group(std::move(group)) {}
 
     std::shared_ptr<Connection> startConnection();
+
+    Group getGroup() {
+        return group;
+    }
+
+    unsigned long long getMemory() {
+        return 0;
+    }
 };
 
 

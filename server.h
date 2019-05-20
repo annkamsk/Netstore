@@ -1,8 +1,4 @@
 
-//
-
-// Created by anna on 14.05.19.
-//
 #ifndef SIK2_SERVER_H
 
 #define SIK2_SERVER_H
@@ -24,6 +20,10 @@ public:
 
     string getFolder() {
         return folder;
+    }
+
+    unsigned long long getMemory() {
+        return memory;
     }
 
     void addFile(const string& filename, unsigned long long size);
