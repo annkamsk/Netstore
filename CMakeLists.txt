@@ -8,7 +8,7 @@ FIND_PACKAGE(Boost COMPONENTS program_options REQUIRED)
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
 
 add_executable(SIK2-server group.h server.h client.h err.h client.cpp netstoreserver.cpp)
-add_executable(SIK2-client netstoreclient.cpp group.h server.h client.h err.h client.cpp server.cpp group.cpp err.cpp)
+add_executable(SIK2-client netstoreclient.cpp group.h server.h client.h err.h client.cpp server.cpp group.cpp err.cpp Connection.cpp Connection.h Command.cpp Command.h)
 
 TARGET_LINK_LIBRARIES(SIK2-server ${Boost_LIBRARIES})
 TARGET_LINK_LIBRARIES(SIK2-client ${Boost_LIBRARIES})

@@ -1,17 +1,14 @@
-#include <utility>
-
-#include <utility>
-
-#include <utility>
 
 //
+
 // Created by anna on 14.05.19.
 //
-
 #ifndef SIK2_SERVER_H
-#define SIK2_SERVER_H
 
+#define SIK2_SERVER_H
 #include "group.h"
+
+#include <utility>
 
 class ServerNode : public Node {
 
@@ -31,17 +28,7 @@ public:
 
     void addFile(const string& filename, unsigned long long size);
 
-    void listen();
 
-    void getList(Command command);
-
-    void getListWith(Command command);
-
-    char getFile(Command command);
-
-    void deleteFile(Command command);
-
-    void addFile(Command command);
 };
 
 #endif //SIK2_SERVER_H

@@ -1,10 +1,7 @@
-//
-// Created by anna on 14.05.19.
-//
-
 #include <iostream>
 #include <boost/program_options.hpp>
 #include <filesystem>
+#include <csignal>
 
 #include "server.h"
 
@@ -67,22 +64,21 @@ void indexFiles(ServerNode server) {
     }
 }
 
-void syserr(const string& desc, const string& val = "") {
-    std::cerr << "ERROR " << val << desc << std::endl;
-    exit(1);
+static void handleInterrupt(const std::shared_ptr<Connection>& connection) {
+    std::cout << "Server interrupted!" << std::endl;
+    connection->detachFromGroup();
+    connection->closeSocket();
 }
 
 int main(int argc, char *argv[]) {
     ServerNode server = readOptions(argc, argv);
     indexFiles(server);
 
-    server.openSocket();
-    server.addToMcast();
-    server.addToLocal();
-
-    std::cout << "Hello, World!" << std::endl;
-    server.detachFromGroup();
-    server.closeSocket();
+    auto connection = server.startConnection();
+    for (;;) {
+        auto msg = connection->readFromSocket();
+        CommandBuilder().build(msg)->execute(connection);
+    }
 
     return 0;
 }
