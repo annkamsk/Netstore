@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <csignal>
 
+#include "Command.h"
 #include "server.h"
 
 using std::string;
@@ -77,8 +78,16 @@ int main(int argc, char *argv[]) {
     auto connection = server.startConnection();
     for (;;) {
         auto response = connection->readFromSocket();
-        CommandBuilder().build(msg)->execute(connection, server);
+        try {
+            auto command = CommandBuilder().build(response.getBuffer());
+            auto responseCommand = command->getResponse(connection, std::make_shared<ServerNode>(server));
+            connection->sendToSocket(response.getCliaddr(), responseCommand.getRawData());
+        } catch (const InvalidMessageException& e) {
+            std::cout << e.what() << std::endl;
+        } catch (const PartialSendException& e) {
+            std::cout << e.what() << std::endl;
+        }
     }
-
+    handleInterrupt(connection);
     return 0;
 }

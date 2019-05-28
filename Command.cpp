@@ -1,4 +1,5 @@
 #include "Command.h"
+#include "server.h"
 
 std::shared_ptr<Command> CommandBuilder::build(const std::vector<char> &data) {
     if (data.size() < Netstore::MIN_SMPL_CMD_SIZE) {
@@ -37,6 +38,7 @@ std::string CommandBuilder::parseCmd(const std::vector<char> &data) {
     if (commandStrings.find(cmd) == commandStrings.end()) {
         throw InvalidMessageException();
     }
+    return cmd;
 }
 
 uint64_t CommandBuilder::parseNum(const std::vector<char> &data, uint32_t from, uint32_t to) {
@@ -49,11 +51,45 @@ uint64_t CommandBuilder::parseNum(const std::vector<char> &data, uint32_t from, 
     return std::stoi(seq);
 }
 
-void SimpleGreetCommand::execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) {
-    /* set parameters */
+Command SimpleGreetCommand::getResponse(const std::shared_ptr<IConnection> &connection, const std::shared_ptr<Node> &node) const {
+    /* set answer parameters */
     ComplexGreetCommand command;
+    command.setSeq(this->cmd_seq);
     command.setParam(node->getMemory());
     auto mcast = node->getGroup().getMCAST_ADDR();
     command.setData(vector<char>(mcast.begin(), mcast.end()));
 
+    return command;
+}
+
+Command SimpleListCommand::getResponse(const std::shared_ptr<IConnection> &connection, const std::shared_ptr<Node> &node) const {
+    MyListCommand command{};
+    command.setSeq(this->cmd_seq);
+    std::vector<char> list{};
+    for (auto f : node->getFiles()) {
+        list.insert(list.end(), f.begin(), f.end());
+        list.push_back('\n');
+    }
+    command.setData(list);
+    return command;
+}
+
+
+std::string Command::getRawData() const {
+    string con = this->cmd;
+
+    /* fill spare space with 0's */
+    for (int i = this->cmd.size(); i < 10; ++i) {
+        con += "0";
+    }
+    con += std::to_string(this->cmd_seq);
+    return con;
+}
+
+std::string SimpleCommand::getRawData() const {
+    return Command::getRawData() + this->data.data();
+}
+
+std::string ComplexCommand::getRawData() const {
+    return Command::getRawData() + std::to_string(this->param) + this->data.data();
 }

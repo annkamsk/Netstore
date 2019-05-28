@@ -10,7 +10,11 @@ extern void syserr(const char *fmt, ...);
 /* wypisuje informacje o bledzie i konczy dzialanie */
 extern void fatal(const char *fmt, ...);
 
-class InvalidMessageException : std::exception {
+class InvalidMessageException : public std::exception {
+
+};
+
+class PartialSendException : public std::exception {
 
 };
 #endif

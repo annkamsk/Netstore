@@ -1,4 +1,4 @@
-SRCS_SERVER = group.cpp err.cpp server.cpp Connection.cpp Command.cpp netstoreserver.cpp
+SRCS_SERVER = err.cpp server.cpp Connection.cpp Command.cpp netstoreserver.cpp
 
 DEPDIR := .d
 $(shell mkdir -p $(DEPDIR) >/dev/null)
@@ -21,7 +21,7 @@ $(DEPDIR)/%.d: ;
 
 include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS_SERVER))))
 
-server : netstoreserver.o server.o Connection.o Command.o group.o err.o
+server : err.o server.o Command.o Connection.o netstoreserver.o
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
 clean:

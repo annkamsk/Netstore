@@ -1,14 +1,8 @@
-#include <utility>
-
-#include <utility>
-
 
 #ifndef SIK2_GROUP_H
 #define SIK2_GROUP_H
 
 #include "Connection.h"
-#include "Command.h"
-#include "err.h"
 
 using std::string;
 using std::vector;
@@ -19,8 +13,11 @@ class Group {
 
 public:
     Group() = default;
+
     Group(string mcast, unsigned int port) : MCAST_ADDR(std::move(mcast)), CMD_PORT(port) {}
+
     string getMCAST_ADDR() { return this->MCAST_ADDR; }
+
     unsigned int getCMD_PORT() { return this->CMD_PORT; }
 };
 
@@ -31,17 +28,22 @@ protected:
 
 public:
     Node() = default;
+
     explicit Node(Group group) : group(std::move(group)) {}
 
-    std::shared_ptr<Connection> startConnection();
+    virtual std::shared_ptr<Connection> startConnection() {
+        return std::make_shared<UDPConnection>(UDPConnection(group.getMCAST_ADDR(), group.getCMD_PORT(), 0));
+    }
 
     Group getGroup() {
         return group;
     }
 
-    unsigned long long getMemory() {
+    virtual unsigned long long getMemory() {
         return 0;
     }
+
+    virtual const vector<string> & getFiles() const { return vector<std::string>{}; }
 };
 
 

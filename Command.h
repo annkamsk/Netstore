@@ -6,23 +6,7 @@
 #include "Connection.h"
 #include "group.h"
 
-class ICommand {
-public:
-    virtual void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node);
-
-    virtual void setSeq(uint64_t seq);
-
-    virtual void setParam(uint64_t param);
-
-    virtual void setData(std::vector<char> data);
-
-    virtual bool isComplex();
-
-    /* returns position of first byte of data part of command */
-    virtual uint32_t getDataStart();
-};
-
-class Command : public ICommand {
+class Command {
 protected:
     std::string cmd;
     uint64_t cmd_seq{}; // bigendian
@@ -35,28 +19,64 @@ protected:
 public:
     explicit Command(std::string cmd) : cmd(std::move(cmd)), cmd_seq(getSeq()) {}
 
-    void setSeq(uint64_t seq) override {
+    void setSeq(uint64_t seq) {
         this->cmd_seq = seq;
     }
 
-    void setData(std::vector<char> dat) override {
+    void setData(std::vector<char> dat) {
         this->data = dat;
     }
+
+    const std::string &getCmd() const {
+        return cmd;
+    }
+
+    void setCmd(const std::string &cmd) {
+        Command::cmd = cmd;
+    }
+
+    uint64_t getCmdSeq() const {
+        return cmd_seq;
+    }
+
+    void setCmdSeq(uint64_t cmdSeq) {
+        cmd_seq = cmdSeq;
+    }
+
+    const std::vector<char> &getData() const {
+        return data;
+    }
+
+    virtual void setParam(uint64_t par) {}
+
+    virtual uint64_t getParam() const { return 0;}
+
+    virtual bool isComplex() const { return false; }
+
+    /* returns position of first byte of data part of command */
+    virtual uint32_t getDataStart() const { return -1; }
+
+    virtual Command getResponse(const std::shared_ptr<IConnection> &connection, const std::shared_ptr<Node> &node) const { return Command(nullptr); }
+
+    virtual std::string getRawData() const;
+
 };
 
 class SimpleCommand : public Command {
 public:
     explicit SimpleCommand(std::string cmd) : Command(std::move(cmd)) {};
 
-    bool isComplex() override {
+    bool isComplex() const override {
         return false;
     }
 
-    void setParam(uint64_t par) override {}
+    uint64_t getParam() const override { return 0; }
 
-    uint32_t getDataStart() override {
+    uint32_t getDataStart() const override {
         return 18;
     }
+
+    std::string getRawData() const override;
 };
 
 class ComplexCommand : public Command {
@@ -65,7 +85,7 @@ class ComplexCommand : public Command {
 public:
     explicit ComplexCommand(std::string cmd) : Command(std::move(cmd)) {};
 
-    bool isComplex() override {
+    bool isComplex() const override {
         return true;
     }
 
@@ -73,108 +93,78 @@ public:
         this->param = par;
     }
 
-    uint32_t getDataStart() override {
+    uint64_t getParam() const override { return this->param; }
+
+    uint32_t getDataStart() const override {
         return 26;
     }
+
+    std::string getRawData() const override;
 };
 
 class SimpleGreetCommand : public SimpleCommand {
 public:
     SimpleGreetCommand() : SimpleCommand("HELLO") {};
 
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override;
+    Command getResponse(const std::shared_ptr<IConnection> &connection, const std::shared_ptr<Node> &node) const override;
 };
 
 class ComplexGreetCommand : public ComplexCommand {
     std::vector<std::string> filenames{};
 public:
     ComplexGreetCommand() : ComplexCommand("GOOD_DAY") {};
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class SimpleListCommand : public SimpleCommand {
 public:
-    SimpleListCommand() : SimpleCommand("LIST") {};
+    SimpleListCommand() : SimpleCommand("LIST") {}
 
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
+    Command getResponse(const std::shared_ptr<IConnection> &connection, const std::shared_ptr<Node> &node) const override;
 };
 
-class ComplexListCommand : public ComplexCommand {
+class MyListCommand : public SimpleCommand {
 public:
-    ComplexListCommand() : ComplexCommand("MY_LIST") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
+    MyListCommand() : SimpleCommand("MY_LIST") {}
 };
 
 class SimpleGetCommand : public SimpleCommand {
 public:
     SimpleGetCommand() : SimpleCommand("GET") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class ComplexGetCommand : public ComplexCommand {
 public:
     ComplexGetCommand() : ComplexCommand("CONNECT_ME") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class SimpleDeleteCommand : public SimpleCommand {
 public:
     SimpleDeleteCommand() : SimpleCommand("DEL") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class RejectAddAnswer : public SimpleCommand {
 public:
     RejectAddAnswer() : SimpleCommand("NO_WAY") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class AcceptAddAnswer : public ComplexCommand {
 public:
     AcceptAddAnswer() : ComplexCommand("CAN_ADD") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class ComplexAddCommand : public ComplexCommand {
 public:
     ComplexAddCommand() : ComplexCommand("ADD") {}
-
-    void execute(std::shared_ptr<IConnection> connection, std::shared_ptr<Node> node) override {
-
-    }
 };
 
 class CommandBuilder {
     inline static std::unordered_map<std::string, std::shared_ptr<Command>> commandStrings = {
-            {"HELLO",      std::make_shared<SimpleGreetCommand>();},
+            {"HELLO",      std::make_shared<SimpleGreetCommand>()},
             {"GOOD_DAY",   std::make_shared<ComplexGreetCommand>()},
             {"LIST",       std::make_shared<SimpleListCommand>()},
-            {"MY_LIST",    std::make_shared<ComplexListCommand>()},
+            {"MY_LIST",    std::make_shared<MyListCommand>()},
             {"GET",        std::make_shared<SimpleGetCommand>()},
-            {"CONNECT_ME", std::make_shared<ComplexListCommand>()},
+            {"CONNECT_ME", std::make_shared<MyListCommand>()},
             {"DEL",        std::make_shared<SimpleDeleteCommand>()},
             {"ADD",        std::make_shared<ComplexAddCommand>()},
             {"CAN_ADD",    std::make_shared<AcceptAddAnswer>()},

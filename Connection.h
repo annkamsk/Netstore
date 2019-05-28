@@ -1,8 +1,6 @@
-#include <utility>
-
-
 #ifndef SIK2_CONNECTION_H
 #define SIK2_CONNECTION_H
+
 #include <string>
 #include <vector>
 #include <list>
@@ -17,6 +15,7 @@
 #include <sys/types.h>
 #include <functional>
 #include <iostream>
+#include <cstring>
 
 #include "err.h"
 
@@ -58,39 +57,61 @@ public:
 class IConnection {
 public:
     virtual void openSocket() = 0;
+
     virtual ConnectionResponse readFromSocket() = 0;
 
+    virtual int getSock() = 0;
+
+    virtual void sendToSocket(struct sockaddr_in rec, std::string data) = 0;
+
 };
+
 class Connection : public IConnection {
 protected:
-    std::string ip;
+    std::string mcast{};
+    std::string local;
+    uint16_t port{};
     int sock{};
-    int port{};
+    unsigned int ttl{};
     struct ip_mreq ip_mreq{};
 
 
 public:
     Connection() = default;
-    Connection(uint16_t port) : port(port){};
+
+    Connection(std::string mcast, uint16_t port, unsigned int ttl) : mcast(std::move(mcast)),
+                                                                     port(port),
+                                                                     ttl(ttl) {}
+    int getSock() override {
+        return this->sock;
+    }
     void addToLocal();
+
     void detachFromGroup();
+
     void closeSocket();
 
-    void addToMcast(std::string mcast);
+    void addToMcast();
 };
 
 class UDPConnection : public Connection {
 public:
-    UDPConnection(uint16_t port) : Connection(port){};
+    UDPConnection(std::string mcast, uint16_t port, unsigned int ttl) : Connection(std::move(mcast), port, ttl) {}
+
     void openSocket() override;
 
     ConnectionResponse readFromSocket() override;
+
+    void sendToSocket(struct sockaddr_in rec, std::string data) override;
 };
 
 class TCPConnection : public Connection {
 public:
     TCPConnection() = default;
+
     void openSocket() override;
+
     ConnectionResponse readFromSocket() override;
 };
+
 #endif //SIK2_CONNECTION_H
