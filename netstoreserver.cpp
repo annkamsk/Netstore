@@ -3,8 +3,8 @@
 #include <filesystem>
 #include <csignal>
 
-#include "Command.h"
 #include "server.h"
+#include "Message.h"
 
 using std::string;
 namespace po = boost::program_options;
@@ -16,7 +16,7 @@ void invalid_option(const string &where, const string &val) {
                                val);
 }
 
-ServerNode readOptions(int argc, char **argv) {
+std::shared_ptr<ServerNode> readOptions(int argc, char **argv) {
     string MCAST_ADDR, SHRD_FLDR;
     unsigned int CMD_PORT, TIMEOUT;
     unsigned long long MAX_SPACE;
@@ -34,7 +34,7 @@ ServerNode readOptions(int argc, char **argv) {
             (",t", po::value<unsigned int>(&TIMEOUT)
                     ->default_value(5)
                     ->notifier([](unsigned int v){
-                        if (v > 300)
+                        if (v > 300 || v < 1)
                             invalid_option("TIMEOUT", std::to_string(v));
                     }), "TIMEOUT");
 
@@ -47,21 +47,20 @@ ServerNode readOptions(int argc, char **argv) {
         exit(1);
     }
 
-    Group group(MCAST_ADDR, CMD_PORT);
-    return ServerNode(group, MAX_SPACE, TIMEOUT, SHRD_FLDR);
+    return std::make_shared<ServerNode>(ServerNode(MCAST_ADDR, CMD_PORT, MAX_SPACE, TIMEOUT, SHRD_FLDR));
 }
 
-void indexFiles(ServerNode server) {
-    fs::path folder(server.getFolder());
+void indexFiles(std::shared_ptr<ServerNode> server) {
+    fs::path folder(server->getFolder());
 
     if (!fs::exists(folder) || !fs::is_directory(folder)) {
-        std::cerr << "ERROR " << server.getFolder() << " is invalid path." << std::endl;
+        std::cerr << "ERROR " << server->getFolder() << " is invalid path." << std::endl;
         exit(1);
     }
 
     for (const auto &entry : fs::directory_iterator(folder)) {
         const fs::path& file(entry.path());
-        server.addFile(entry.path().filename(), fs::file_size(file));
+        server->addFile(entry.path().filename(), fs::file_size(file));
     }
 }
 
@@ -72,16 +71,16 @@ static void handleInterrupt(const std::shared_ptr<Connection>& connection) {
 }
 
 int main(int argc, char *argv[]) {
-    ServerNode server = readOptions(argc, argv);
+    auto server = readOptions(argc, argv);
     indexFiles(server);
 
-    auto connection = server.startConnection();
+    auto connection = server->startConnection();
     for (;;) {
         auto response = connection->readFromSocket();
         try {
-            auto command = CommandBuilder().build(response.getBuffer());
-            auto responseCommand = command->getResponse(connection, std::make_shared<ServerNode>(server));
-            connection->sendToSocket(response.getCliaddr(), responseCommand.getRawData());
+            auto message = MessageBuilder().build(response.getBuffer());
+            auto responseMessage = message->getResponse(server);
+            connection->sendToSocket(response.getCliaddr(), responseMessage.getRawData());
         } catch (const InvalidMessageException& e) {
             std::cout << e.what() << std::endl;
         } catch (const PartialSendException& e) {

@@ -1,49 +1,46 @@
+#include <utility>
+#include <boost/algorithm/string.hpp>
+
 
 #ifndef SIK2_GROUP_H
 #define SIK2_GROUP_H
 
 #include "Connection.h"
 
-using std::string;
-using std::vector;
-
-class Group {
-    string MCAST_ADDR;
-    unsigned int CMD_PORT{};
-
-public:
-    Group() = default;
-
-    Group(string mcast, unsigned int port) : MCAST_ADDR(std::move(mcast)), CMD_PORT(port) {}
-
-    string getMCAST_ADDR() { return this->MCAST_ADDR; }
-
-    unsigned int getCMD_PORT() { return this->CMD_PORT; }
-};
-
-
 class Node {
-protected:
-    Group group;
-
+private:
+    std::vector<std::string> files;
+    std::string folder;
+    std::shared_ptr<UDPConnection> connection;
 public:
-    Node() = default;
-
-    explicit Node(Group group) : group(std::move(group)) {}
+    Node(std::string mcast, unsigned port, unsigned timeout, std::string folder) :
+            folder(std::move(folder)),
+            connection(std::make_shared<UDPConnection>(UDPConnection(mcast, port, timeout))) {}
 
     virtual std::shared_ptr<Connection> startConnection() {
-        return std::make_shared<UDPConnection>(UDPConnection(group.getMCAST_ADDR(), group.getCMD_PORT(), 0));
+        return this->connection;
     }
 
-    Group getGroup() {
-        return group;
+    std::shared_ptr<UDPConnection> getConnection() {
+        return this->connection;
     }
 
     virtual unsigned long long getMemory() {
         return 0;
     }
 
-    virtual const vector<string> & getFiles() const { return vector<std::string>{}; }
+    std::string getFolder() {
+        return folder;
+    }
+
+    const std::vector<std::string> &getFiles() const {
+        return files;
+    }
+
+    virtual void addFile(const std::string &filename, unsigned long long size) {
+        this->files.push_back(filename);
+    }
+
 };
 
 

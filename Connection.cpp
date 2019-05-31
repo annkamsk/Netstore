@@ -43,6 +43,44 @@ void Connection::closeSocket() {
     close(this->sock);
 }
 
+void Connection::activateBroadcast() {
+    int optval = 1;
+    if (setsockopt(this->sock, SOL_SOCKET, SO_BROADCAST, (void*)&optval, sizeof optval) < 0) {
+        syserr("setsockopt broadcast");
+    }
+
+    /* set TTL */
+    optval = this->ttl;
+    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (void*)&optval, sizeof optval) < 0) {
+        syserr("setsockopt multicast ttl");
+    }
+
+    /* block broadcasting to yourself */
+    optval = 0;
+    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void*)&optval, sizeof optval) < 0) {
+        syserr("setsockopt loop");
+    }
+
+}
+
+void Connection::setReceiver() {
+    char *remote_dotted_address = this->mcast.data();
+
+    struct sockaddr_in remote_address{};
+    remote_address.sin_family = AF_INET;
+    remote_address.sin_port = htons(this->port);
+    if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
+        syserr("inet_aton");
+    }
+    if (connect(sock, (struct sockaddr *)&remote_address, sizeof remote_address) < 0) {
+        syserr("connect");
+    }
+}
+
+void Connection::broadcast(std::string data) {
+
+}
+
 ConnectionResponse UDPConnection::readFromSocket() {
     ConnectionResponse response{};
     std::vector<char> buffer(Netstore::MAX_SMPL_CMD_SIZE);
@@ -72,6 +110,10 @@ void UDPConnection::openSocket() {
     if ((this->sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         syserr("socket");
     }
+}
+
+void UDPConnection::broadcast(std::string data) {
+    Connection::broadcast(data);
 }
 
 void TCPConnection::openSocket() {

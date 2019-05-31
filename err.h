@@ -17,4 +17,8 @@ class InvalidMessageException : public std::exception {
 class PartialSendException : public std::exception {
 
 };
+
+class InvalidInputException : public std::exception {
+
+};
 #endif

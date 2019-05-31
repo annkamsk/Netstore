@@ -64,6 +64,8 @@ public:
 
     virtual void sendToSocket(struct sockaddr_in rec, std::string data) = 0;
 
+    virtual std::string getMcast() const = 0;
+
 };
 
 class Connection : public IConnection {
@@ -85,6 +87,14 @@ public:
     int getSock() override {
         return this->sock;
     }
+
+    unsigned getTTL() {
+        return this->ttl;
+    }
+
+    std::string getMcast() const override {
+        return this->mcast;
+    }
     void addToLocal();
 
     void detachFromGroup();
@@ -92,6 +102,12 @@ public:
     void closeSocket();
 
     void addToMcast();
+
+    void activateBroadcast();
+
+    void setReceiver();
+
+    virtual void broadcast(std::string data);
 };
 
 class UDPConnection : public Connection {
@@ -103,6 +119,8 @@ public:
     ConnectionResponse readFromSocket() override;
 
     void sendToSocket(struct sockaddr_in rec, std::string data) override;
+
+    void broadcast(std::string data) override;
 };
 
 class TCPConnection : public Connection {
