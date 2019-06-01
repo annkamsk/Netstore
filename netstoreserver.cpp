@@ -50,7 +50,7 @@ std::shared_ptr<ServerNode> readOptions(int argc, char **argv) {
     return std::make_shared<ServerNode>(ServerNode(MCAST_ADDR, CMD_PORT, MAX_SPACE, TIMEOUT, SHRD_FLDR));
 }
 
-void indexFiles(std::shared_ptr<ServerNode> server) {
+void indexFiles(const std::shared_ptr<ServerNode>& server) {
     fs::path folder(server->getFolder());
 
     if (!fs::exists(folder) || !fs::is_directory(folder)) {

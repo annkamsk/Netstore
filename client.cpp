@@ -37,12 +37,11 @@ void ClientNode::readUserInput() {
 void ClientNode::discover() {
     SimpleGreetMessage message{};
     Node::getConnection()->broadcast(message.getRawData());
-    // block ui
     // wait for TTL for responses
-    auto response = Node::getConnection()->readFromSocket();
-    auto responseMessage = MessageBuilder().build(response.getBuffer());
-    std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
-              << ") with free space " << responseMessage->getParam() << "\n";
+    Node::getConnection()->waitForResponse();
+//    auto responseMessage = MessageBuilder().build(response.getBuffer());
+//    std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
+//              << ") with free space " << responseMessage->getParam() << "\n";
 //    Dla każdego odnalezionego serwera klient powinien wypisać na standardowe wyjście w jednej linii adres jednostkowy IP tego serwera,
 //    następnie w nawiasie adres MCAST_ADDR otrzymany od danego serwera, a na końcu rozmiar dostępnej przestrzeni dyskowej na tym serwerze.
 //    Found 10.1.1.28 (239.10.11.12) with free space 23456

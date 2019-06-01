@@ -16,6 +16,7 @@
 #include <functional>
 #include <iostream>
 #include <cstring>
+#include <poll.h>
 
 #include "err.h"
 
@@ -70,15 +71,13 @@ public:
 
 class Connection : public IConnection {
 protected:
+    static const unsigned N = 50;
     std::string mcast{};
     std::string local;
     uint16_t port{};
-
-protected:
-    int sock{};
     unsigned int ttl{};
     struct ip_mreq ip_mreq{};
-
+    int masterSock{}, sockets[N]{};
 
 public:
     Connection() = default;
@@ -86,8 +85,9 @@ public:
     Connection(std::string mcast, uint16_t port, unsigned int ttl) : mcast(std::move(mcast)),
                                                                      port(port),
                                                                      ttl(ttl) {}
+
     int getSock() override {
-        return this->sock;
+        return this->masterSock;
     }
 
     unsigned getTTL() {
@@ -101,7 +101,6 @@ public:
     uint16_t getPort() const {
         return port;
     }
-
     void addToLocal(unsigned port = 0);
 
     void detachFromGroup();
@@ -115,6 +114,8 @@ public:
     void setReceiver();
 
     virtual void broadcast(std::string data);
+
+    void waitForResponse();
 };
 
 class UDPConnection : public Connection {
