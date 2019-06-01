@@ -11,29 +11,31 @@ std::shared_ptr<Connection> ClientNode::startConnection() {
 }
 
 void ClientNode::readUserInput() {
-    std::string command{};
+    std::string command;
     std::getline(std::cin, command);
-
-    std::vector<std::string> tokens;
-    boost::split(tokens, command, [](char c) { return c == ' '; });
-
-    if (tokens.size() > 2 || tokens.empty()) {
-        throw InvalidInputException();
+    std::vector<std::string> tokens(2, "");
+    /* split command */
+    for (size_t i = 0, j = 0; j < 2 && i < command.length(); ++i) {
+        if (command.at(i) == ' ' || command.at(i) == '\n') {
+            ++j;
+        } else {
+            tokens.at(j) += command.at(i);
+        }
     }
 
     /* client should be case insensitive, so let's transform string to lower case */
     std::transform(tokens.at(0).begin(), tokens.at(0).end(), tokens.at(0).begin(), ::tolower);
 
-    /* if input is not of form: 'command %s\n' */
+    /* if input is not of form: 'command( \w+)\n' */
     if (this->commands.find(tokens.at(0)) == this->commands.end()) {
         throw InvalidInputException();
     }
     /* return message associated with given input */
-    commands.at(tokens.at(0))(tokens.size() > 1 ? tokens.at(1) : "");
+    commands.at(tokens.at(0))(tokens.at(1));
 }
 
 void ClientNode::discover() {
-    auto message = SimpleGreetMessage();
+    SimpleGreetMessage message{};
     Node::getConnection()->broadcast(message.getRawData());
     // block ui
     // wait for TTL for responses

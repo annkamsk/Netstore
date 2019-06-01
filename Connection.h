@@ -73,6 +73,8 @@ protected:
     std::string mcast{};
     std::string local;
     uint16_t port{};
+
+protected:
     int sock{};
     unsigned int ttl{};
     struct ip_mreq ip_mreq{};
@@ -95,7 +97,12 @@ public:
     std::string getMcast() const override {
         return this->mcast;
     }
-    void addToLocal();
+
+    uint16_t getPort() const {
+        return port;
+    }
+
+    void addToLocal(unsigned port = 0);
 
     void detachFromGroup();
 

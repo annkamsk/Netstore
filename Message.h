@@ -1,22 +1,30 @@
+#include <utility>
+
 
 #ifndef SIK2_MESSAGE_H
 #define SIK2_MESSAGE_H
 
 #include "err.h"
 #include "group.h"
+#include <random>
 
 class Message {
+private:
+
 protected:
     std::string cmd;
     uint64_t cmd_seq{}; // bigendian
-    std::vector<char> data{};
+    std::vector<char> data;
 
-    static long getSeq() {
-        return 0;
+    static uint64_t getSeq() {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_int_distribution<uint64_t> dis(1, UINT64_MAX);
+        return dis(gen);
     }
 
 public:
-    explicit Message(const std::string &cmd) : cmd(cmd), cmd_seq(getSeq()) {}
+    explicit Message(std::string cmd) : cmd(std::move(cmd)), cmd_seq(getSeq()) {}
 
     void setSeq(uint64_t seq) {
         this->cmd_seq = seq;
@@ -59,7 +67,7 @@ public:
 
 class SimpleMessage : public Message {
 public:
-    explicit SimpleMessage(std::string cmd) : Message(std::move(cmd)) {};
+    explicit SimpleMessage(const std::string& cmd) : Message(cmd) {};
 
     bool isComplex() const override {
         return false;
@@ -78,7 +86,7 @@ class ComplexMessage : public Message {
     uint64_t param{}; // bigendian
 
 public:
-    explicit ComplexMessage(std::string cmd) : Message(std::move(cmd)) {};
+    explicit ComplexMessage(const std::string& cmd) : Message(cmd) {};
 
     bool isComplex() const override {
         return true;

@@ -27,7 +27,7 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data) {
 
 std::string MessageBuilder::parseCmd(const std::vector<char> &data) {
     /* get alpha chars from first 10 chars of data */
-    std::string cmd{};
+    std::string cmd;
     for (auto ite = data.begin(); ite < data.begin() + 10; ++ite) {
         if (!isalpha(*ite)) break;
         cmd.push_back(*ite);
@@ -75,18 +75,17 @@ Message SimpleListMessage::getResponse(const std::shared_ptr<Node> &node) const 
 
 
 std::string Message::getRawData() const {
-    std::string con = this->cmd;
-
+    std::string con(this->cmd);
     /* fill spare space with 0's */
-    for (int i = this->cmd.size(); i < 10; ++i) {
-        con += "0";
+    for (int i = con.size(); i < 10; ++i) {
+        con.push_back(0);
     }
     con += std::to_string(this->cmd_seq);
     return con;
 }
 
 std::string SimpleMessage::getRawData() const {
-    return Message::getRawData() + this->data.data();
+    return Message::getRawData() + (this->data.empty() ? "" : this->data.data());
 }
 
 std::string ComplexMessage::getRawData() const {

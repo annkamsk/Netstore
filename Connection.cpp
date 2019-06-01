@@ -1,10 +1,10 @@
 #include "Connection.h"
 
-void Connection::addToLocal() {
+void Connection::addToLocal(unsigned portt) {
     struct sockaddr_in local_address{};
     local_address.sin_family = AF_INET;
     local_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    local_address.sin_port = htons(this->port);
+    local_address.sin_port = htons(portt);
     if (bind(this->sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
         syserr("bind");
     }
@@ -26,11 +26,11 @@ void Connection::addToMcast() {
     uint optval = this->ttl;
     setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (void *) &optval, sizeof(optval));
 
-    /* block multicast to yourself */
-    optval = 0;
-    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void *) &optval, sizeof optval) < 0) {
-        syserr("setsockopt loop");
-    }
+//    /* block multicast to yourself */
+//    optval = 0;
+//    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void *) &optval, sizeof optval) < 0) {
+//        syserr("setsockopt loop");
+//    }
 }
 
 void Connection::detachFromGroup() {
@@ -45,21 +45,21 @@ void Connection::closeSocket() {
 
 void Connection::activateBroadcast() {
     int optval = 1;
-    if (setsockopt(this->sock, SOL_SOCKET, SO_BROADCAST, (void*)&optval, sizeof optval) < 0) {
+    if (setsockopt(this->sock, SOL_SOCKET, SO_BROADCAST, (void *) &optval, sizeof optval) < 0) {
         syserr("setsockopt broadcast");
     }
 
     /* set TTL */
     optval = this->ttl;
-    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (void*)&optval, sizeof optval) < 0) {
+    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (void *) &optval, sizeof optval) < 0) {
         syserr("setsockopt multicast ttl");
     }
 
     /* block broadcasting to yourself */
-    optval = 0;
-    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void*)&optval, sizeof optval) < 0) {
-        syserr("setsockopt loop");
-    }
+//    optval = 0;
+//    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void*)&optval, sizeof optval) < 0) {
+//        syserr("setsockopt loop");
+//    }
 
 }
 
@@ -72,7 +72,7 @@ void Connection::setReceiver() {
     if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
         syserr("inet_aton");
     }
-    if (connect(sock, (struct sockaddr *)&remote_address, sizeof remote_address) < 0) {
+    if (connect(sock, (struct sockaddr *) &remote_address, sizeof remote_address) < 0) {
         syserr("connect");
     }
 }
@@ -91,7 +91,7 @@ ConnectionResponse UDPConnection::readFromSocket() {
     if (singleLen < 0) {
         syserr("read");
     } else {
-        printf("read %zd bytes: %.*s\n", singleLen, (int) singleLen, buffer.data());
+        std::cout << "read " << singleLen << " bytes: " << buffer.data() << "\n";
     }
     response.setBuffer(buffer);
     return response;
@@ -104,6 +104,8 @@ void UDPConnection::sendToSocket(struct sockaddr_in address, std::string data) {
     if (snd_len != len) {
         throw PartialSendException();
     }
+    std::cout << "Sent " << data.length() << " bytes of data: " << data.data() << " to "
+              << inet_ntoa(address.sin_addr) << "\n";
 }
 
 void UDPConnection::openSocket() {
@@ -113,7 +115,10 @@ void UDPConnection::openSocket() {
 }
 
 void UDPConnection::broadcast(std::string data) {
-    Connection::broadcast(data);
+    if (write(sock, data.data(), data.length()) != data.length()) {
+        syserr("write");
+    }
+    std::cout << "Sent " << data.length() << " bytes of data " << data + "\n";
 }
 
 void TCPConnection::openSocket() {

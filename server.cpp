@@ -11,7 +11,7 @@ std::shared_ptr<Connection> ServerNode::startConnection() {
     auto connection = Node::startConnection();
     connection->openSocket();
     connection->addToMcast();
-    connection->addToLocal();
+    connection->addToLocal(this->getConnection()->getPort());
     return connection;
 }
 

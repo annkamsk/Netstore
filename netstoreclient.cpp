@@ -54,7 +54,12 @@ int main(int argc, char *argv[]) {
 
     auto connection = client.startConnection();
     for (;;) {
-        client.readUserInput();
+        try {
+            std::cout <<"Write a command: \n";
+            client.readUserInput();
+        } catch (InvalidInputException &e) {
+            std::cout << e.what();
+        }
     }
 
     return 0;
