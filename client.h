@@ -20,7 +20,7 @@ private:
 
     void exit();
 
-    std::vector<std::string, std::function<void(std::string)>> commands = {
+    std::map<std::string, std::function<void(std::string)>> commands = {
             {"discover", [=](const std::string &s) { this->discover(); }},
             {"search",   [=](const std::string &s) { this->search(s); }},
             {"fetch",    [=](const std::string &s) { this->fetch(s); }},

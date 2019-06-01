@@ -25,7 +25,7 @@ void ClientNode::readUserInput() {
     std::transform(tokens.at(0).begin(), tokens.at(0).end(), tokens.at(0).begin(), ::tolower);
 
     /* if input is not of form: 'command %s\n' */
-    if (this->commands.at(tokens.at(0)) == this->commands.end()) {
+    if (this->commands.find(tokens.at(0)) == this->commands.end()) {
         throw InvalidInputException();
     }
     /* return message associated with given input */
@@ -39,8 +39,8 @@ void ClientNode::discover() {
     // wait for TTL for responses
     auto response = Node::getConnection()->readFromSocket();
     auto responseMessage = MessageBuilder().build(response.getBuffer());
-    std::cout << "Found " << response.getCliaddr().sin_addr << " (" << responseMessage->getData().data()
-              << ") with free space " << responseMessage->getParam() << std::endl;
+    std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
+              << ") with free space " << responseMessage->getParam() << "\n";
 //    Dla każdego odnalezionego serwera klient powinien wypisać na standardowe wyjście w jednej linii adres jednostkowy IP tego serwera,
 //    następnie w nawiasie adres MCAST_ADDR otrzymany od danego serwera, a na końcu rozmiar dostępnej przestrzeni dyskowej na tym serwerze.
 //    Found 10.1.1.28 (239.10.11.12) with free space 23456
@@ -79,7 +79,7 @@ void ClientNode::remove(const std::string &s) {
     }
     auto message = SimpleDeleteMessage();
     message.setData(std::vector(s.begin(), s.end()));
-    this->getConnection().broadcast(message.getRawData());
+    this->getConnection()->broadcast(message.getRawData());
 //    klient po otrzymaniu tego polecenia powinien wysłać do grupy serwerów zlecenie usunięcia wskazanego przez
 //    użytkownika pliku.
 }
