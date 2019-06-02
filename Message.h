@@ -13,7 +13,7 @@ private:
 
 protected:
     std::string cmd;
-    uint64_t cmd_seq{}; // bigendian
+    uint64_t cmd_seq{}; // TODO bigendian
     std::vector<char> data;
 
     static uint64_t getSeq() {
@@ -50,7 +50,7 @@ public:
         return data;
     }
 
-    virtual void setParam(uint64_t par) {}
+    virtual void setParam(uint64_t par) { (void)par; }
 
     virtual uint64_t getParam() const { return 0;}
 
@@ -59,7 +59,7 @@ public:
     /* returns position of first byte of data part of message */
     virtual uint32_t getDataStart() const { return -1; }
 
-    virtual Message getResponse(const std::shared_ptr<Node> &node) const { return Message(nullptr); }
+    virtual Message getResponse(const std::shared_ptr<Node> &node) const { (void)node; return Message(nullptr); }
 
     virtual std::string getRawData() const;
 
@@ -133,6 +133,7 @@ public:
 class SimpleGetMessage : public SimpleMessage {
 public:
     SimpleGetMessage() : SimpleMessage("GET") {}
+    Message getResponse(const std::shared_ptr<Node> &node) const override;
 };
 
 class ComplexGetMessage : public ComplexMessage {
@@ -177,7 +178,7 @@ class MessageBuilder {
 public:
     MessageBuilder() = default;
 
-    std::shared_ptr<Message> build(const std::vector<char> &data);
+    std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq = 0);
 
 private:
     std::string parseCmd(const std::vector<char> &data);

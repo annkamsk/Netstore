@@ -31,6 +31,12 @@ public:
         return "This command is invalid.\n";
     }
 
+};
 
+class WrongSeqException : public std::exception {
+public:
+    const char *what() const noexcept override {
+        return "Packet with wrong seq.\n";
+    }
 };
 #endif

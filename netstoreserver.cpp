@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
     for (;;) {
         auto response = connection->readFromSocket();
         try {
-            auto message = MessageBuilder().build(response.getBuffer());
+            auto message = MessageBuilder().build(response.getBuffer(), 0);
             auto responseMessage = message->getResponse(server);
             connection->sendToSocket(response.getCliaddr(), responseMessage.getRawData());
         } catch (const InvalidMessageException& e) {

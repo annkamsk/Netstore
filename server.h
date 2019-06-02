@@ -7,7 +7,7 @@
 class ServerNode : public Node {
 
 private:
-    unsigned long long memory{};
+    uint64_t memory{};
 
 public:
     ServerNode(const std::string &mcast, unsigned port, unsigned long long memory, unsigned int timeout,

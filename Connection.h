@@ -6,6 +6,7 @@
 #include <list>
 #include <utility>
 #include <map>
+#include <unordered_map>
 #include <algorithm>
 #include <memory>
 #include <sys/socket.h>
@@ -101,7 +102,7 @@ public:
     uint16_t getPort() const {
         return port;
     }
-    void addToLocal(unsigned port = 0);
+    virtual void addToLocal(unsigned port);
 
     void detachFromGroup();
 
@@ -115,7 +116,7 @@ public:
 
     virtual void broadcast(std::string data);
 
-    void waitForResponse();
+    ConnectionResponse waitForResponse();
 };
 
 class UDPConnection : public Connection {
@@ -132,12 +133,18 @@ public:
 };
 
 class TCPConnection : public Connection {
+    static const int N = 20;
+    struct pollfd fds[N]{ -1, POLLIN, 0 };
 public:
     TCPConnection() = default;
 
     void openSocket() override;
+    void addToLocal(unsigned port) override;
+
+    void setToListen();
 
     ConnectionResponse readFromSocket() override;
+
 };
 
 #endif //SIK2_CONNECTION_H

@@ -1,4 +1,6 @@
 #include <utility>
+
+#include <utility>
 #include <boost/algorithm/string.hpp>
 
 
@@ -12,10 +14,11 @@ private:
     std::vector<std::string> files;
     std::string folder;
     std::shared_ptr<UDPConnection> connection;
+    std::shared_ptr<TCPConnection> tcp;
 public:
     Node(std::string mcast, unsigned port, unsigned timeout, std::string folder) :
             folder(std::move(folder)),
-            connection(std::make_shared<UDPConnection>(UDPConnection(mcast, port, timeout))) {}
+            connection(std::make_shared<UDPConnection>(UDPConnection(std::move(mcast), port, timeout))) {}
 
     virtual std::shared_ptr<Connection> startConnection() {
         return this->connection;
@@ -39,6 +42,12 @@ public:
 
     virtual void addFile(const std::string &filename, unsigned long long size) {
         this->files.push_back(filename);
+        (void)size;
+    }
+
+    virtual void addFile(const std::string &filename, sockaddr_in addr) {
+        this->files.push_back(filename);
+        (void)addr;
     }
 
 };

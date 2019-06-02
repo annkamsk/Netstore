@@ -5,6 +5,10 @@
 #include "Message.h"
 #include <wait.h>
 #include <boost/algorithm/string.hpp>
+#include <filesystem>
+#include <queue>
+
+namespace fs = std::filesystem;
 
 class ClientNode : public Node {
 private:
@@ -28,6 +32,9 @@ private:
             {"remove",   [=](const std::string &s) { this->remove(s); }},
             {"exit",     [=](const std::string &s) { this->exit(); }}
     };
+    std::map<std::string, std::queue<sockaddr_in>> files;
+    std::map<uint64_t, std::queue<sockaddr_in>> space;
+
 public:
 
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, const std::string &folder) :
@@ -36,6 +43,8 @@ public:
     std::shared_ptr<Connection> startConnection() override;
 
     void readUserInput();
+
+    void addFile(const std::string &filename, sockaddr_in addr) override;
 
 };
 

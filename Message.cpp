@@ -1,6 +1,6 @@
 #include "Message.h"
 
-std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data) {
+std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, uint64_t seq) {
     if (data.size() < Netstore::MIN_SMPL_CMD_SIZE) {
         throw InvalidMessageException();
     }
@@ -9,8 +9,11 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data) {
     std::string cmd = this->parseCmd(data);
     auto message = messageStrings.at(cmd);
 
-    /* set cmd_seq */
+    /* set cmd_seq and, if applicable, check whether it's the same as awaited seq */
     message->setSeq(parseNum(data, 10, 18));
+    if (seq != 0 && message->getCmdSeq() != seq) {
+        throw WrongSeqException();
+    }
 
     if (message->isComplex()) {
         if (data.size() < Netstore::MIN_CMPLX_CMD_SIZE) {
@@ -90,4 +93,11 @@ std::string SimpleMessage::getRawData() const {
 
 std::string ComplexMessage::getRawData() const {
     return Message::getRawData() + std::to_string(this->param) + this->data.data();
+}
+
+Message SimpleGetMessage::getResponse(const std::shared_ptr<Node> &node) const {
+    ComplexGetMessage message{};
+    message.setSeq(this->getCmdSeq());
+    message.setData(this->getData());
+
 }
