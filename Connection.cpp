@@ -2,6 +2,7 @@
 #include <stropts.h>
 #include <bits/fcntl-linux.h>
 #include <fcntl.h>
+#include <fstream>
 #include "Connection.h"
 
 void Connection::addToLocal(unsigned portt) {
@@ -139,7 +140,7 @@ void UDPConnection::sendToSocket(struct sockaddr_in address, std::string data) {
               << inet_ntoa(address.sin_addr) << "\n";
 }
 
-void UDPConnection::openSocket() {
+void Connection::openUDPSocket() {
     if ((this->masterSock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         syserr("socket");
     }
@@ -152,22 +153,48 @@ void UDPConnection::broadcast(std::string data) {
     std::cout << "Sent " << data.length() << " bytes of data " << data + "\n";
 }
 
-void TCPConnection::openSocket() {
-    if ((fds[0].fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+int Connection::openTCPSocket(int port, std::string ip) {
+    int sock;
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         syserr("socket");
     }
     /* allow socket descriptor to be reusable */
     int on = 1;
-    if (setsockopt(fds[0].fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
-        close(fds[0].fd);
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
+        close(sock);
         syserr("setsockopt");
     }
-
-    /* set socket to be non blocking */
-    if (fcntl(fds[0].fd, F_SETFL, O_NONBLOCK) < 0) {
-        close(fds[0].fd);
-        syserr("ioctl");
+    /* bind */
+    struct sockaddr_in local_address{};
+    local_address.sin_family = AF_INET;
+    local_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    local_address.sin_port = htons(0);
+    if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
+        syserr("bind");
     }
+
+    char *remote_dotted_address = ip.data();
+
+    struct sockaddr_in remote_address{};
+    remote_address.sin_family = AF_INET;
+    remote_address.sin_port = htons(port);
+    if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
+        syserr("inet_aton");
+    }
+    if (connect(sock, (struct sockaddr *) &remote_address, sizeof remote_address) < 0) {
+        syserr("connect");
+    }
+    /* set socket to be non blocking */
+//    if (fcntl(fds[0].fd, F_SETFL, O_NONBLOCK) < 0) {
+//        close(fds[0].fd);
+//        syserr("ioctl");
+//    }
+    return sock;
+}
+
+void TCPConnection::openSocket() {
+
+
 }
 
 ConnectionResponse TCPConnection::readFromSocket() {
@@ -179,7 +206,7 @@ ConnectionResponse TCPConnection::readFromSocket() {
         }
         if (res == 0) {
             std::cout << "Poll timed out.\n";
-            break;
+            continue;
         }
         if (fds[0].revents & POLLIN) {
             fds[0].revents = 0;
@@ -189,26 +216,42 @@ ConnectionResponse TCPConnection::readFromSocket() {
             for (ssize_t k = 1; k < N; ++k) {
                 if (fds[k].fd == -1) {
                     fds[k].fd = s;
-                    fds[k].revents = 1;
+                    fds[k].revents = POLLIN;
                     break;
                 }
             }
         }
         for (ssize_t k = 1; k < N; ++k) {
-            if ((fds[k].revents & POLLIN) | POLLERR ) {
+            if ((fds[k].revents & POLLIN) | POLLERR) {
                 fds[k].revents = 0;
 
-//                if (read(fds[k].fd)) {
-
-                    /* obsłuż klienta na gnieździe fds[k].fd */
-                    /* jeżeli read przekaże 0, usuń pozycję k z fds */
-//                }
-
+                /* receive file in new thread so it's not blocking */
+                ths.emplace_back([=](pollfd *sock) {
+                    receiveFile(sock->fd);
+                    /* delete descriptor */
+                    fds[k].fd = -1;
+                }, &fds[k]);
             }
         }
         return ConnectionResponse();
-    } while(1);
+    } while (true);
 }
+
+std::vector<char> Connection::receiveFile(int sock) {
+    std::vector<char> data;
+    std::vector<char> buffer(Netstore::BUFFER_LEN);
+    ssize_t len;
+    do {
+        if ((len = read(sock, &buffer[0], buffer.size())) < 0) {
+            throw MessageSendException("There was problem with read, while receiving files from server.\n");
+        }
+        std::cout << "Read " << len << " bytes from socket.\n";
+        data.insert(data.end(), buffer.begin(), buffer.begin() + len);
+        buffer.clear();
+    } while (len > 0);
+    return data;
+}
+
 
 void TCPConnection::addToLocal(unsigned port) {
     struct sockaddr_in local_address{};
@@ -225,4 +268,8 @@ void TCPConnection::setToListen() {
         close(fds[0].fd);
         exit(-1);
     }
+}
+
+void TCPConnection::sendToSocket(struct sockaddr_in rec, std::string data) {
+
 }

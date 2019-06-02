@@ -26,6 +26,8 @@ namespace Netstore {
     const static int MIN_CMPLX_CMD_SIZE = 26;
     /* max SIMPL_CMD size = 10 (cmd) + 8 (seq) + 256 (max filename length) */
     const static unsigned MAX_SMPL_CMD_SIZE = 274;
+
+    const static unsigned BUFFER_LEN = 2048;
 }
 
 class ConnectionResponse {
@@ -102,6 +104,9 @@ public:
     uint16_t getPort() const {
         return port;
     }
+
+    void openUDPSocket();
+
     virtual void addToLocal(unsigned port);
 
     void detachFromGroup();
@@ -117,6 +122,10 @@ public:
     virtual void broadcast(std::string data);
 
     ConnectionResponse waitForResponse();
+
+    int openTCPSocket(int port, std::string ip);
+
+    std::vector<char> receiveFile(int sock);
 };
 
 class UDPConnection : public Connection {

@@ -34,18 +34,30 @@ private:
     };
     std::map<std::string, std::queue<sockaddr_in>> files;
     std::map<uint64_t, std::queue<sockaddr_in>> space;
+    std::map<int, uint64_t> fdToSeq;
+    std::map<int, sockaddr_in> fdToAddr;
+    static const int N = 20;
+    struct pollfd fds[N]{-1, POLLIN, 0};
+    int ite{};
+
 
 public:
 
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, const std::string &folder) :
             Node(mcast, port, timeout, folder) {}
 
-    std::shared_ptr<Connection> startConnection() override;
-
-    void readUserInput();
+    void readInput();
 
     void addFile(const std::string &filename, sockaddr_in addr) override;
 
-};
+    void fetchFile(ComplexGetMessage message);
 
+    void startUserInput();
+
+    void readUserInput();
+
+    std::shared_ptr<Connection> startConnection();
+
+    void addTCPConnection();
+};
 #endif //SIK2_CLIENT_H

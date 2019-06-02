@@ -1,21 +1,72 @@
 #include <fstream>
 #include "client.h"
 
+void ClientNode::startUserInput() {
+    /* set file descriptor for user input */
+    this->fds[ite++] = {0, POLLIN, 0};
+
+}
+
 std::shared_ptr<Connection> ClientNode::startConnection() {
     std::shared_ptr<Connection> connection = Node::getConnection();
-    connection->openSocket();
+    connection->openUDPSocket();
     connection->activateBroadcast();
-    connection->addToLocal();
+    connection->addToLocal(0);
     connection->setReceiver();
+    int timeout = connection->getTTL();
+    this->fds[ite++] = {connection->getSock(), POLLIN, (short) timeout};
     return connection;
 }
 
+void ClientNode::readInput() {
+    int ret;
+    if ((ret = poll(fds, ite, 1000)) < 0) {
+        syserr("poll");
+    }
+    /* if there is user input */
+    if (ret > 0 && (fds[0].revents & POLLIN)) {
+        fds[0].revents = 0;
+        readUserInput();
+        /* if there is UDP packet */
+    } else if (ret > 0 && (fds[1].revents & POLLIN)) {
+        fds[1].revents = 0;
+        ConnectionResponse response = getConnection()->readFromSocket();
+        auto responseMessage = MessageBuilder().build(response.getBuffer(), -1);
+
+        if (responseMessage->getCmd() == "CONNECT_ME") {
+            /* start TCP connection */
+            this->fds[ite++] = {this->getConnection()->openTCPSocket(
+                    responseMessage->getParam(),
+                    inet_ntoa(response.getCliaddr().sin_addr)), POLLIN, 0};
+        }
+        /* if there is TCP data */
+    } else if (ret > 0) {
+        for (ssize_t i = 2; i < N; ++i) {
+            if (fds[i].revents & POLLIN) {
+                getThs().emplace_back(std::thread([=](int sock, std::string path, sockaddr_in addr) {
+                    auto data = this->getConnection()->receiveFile(sock);
+                    auto responseMessage = MessageBuilder().build(data, fdToSeq[sock]);
+                    std::ofstream ofs(path);
+                    ofs << data.data();
+                    std::cout << "File " << path << " downloaded (" << inet_ntoa(addr.sin_addr) << ":" << addr.sin_port
+                              << ")\n";
+                }), fds[i].fd, this->getFolder())
+            }
+        }
+    }
+
+}
+
 void ClientNode::readUserInput() {
-    std::string command;
-    std::getline(std::cin, command);
+    std::vector<char> command;
+    std::vector<char> buffer(N);
+    int n;
+    while ((n = read(fds[0].fd, &buffer[0], N))) {
+        command.insert(command.end(), buffer.begin(), buffer.begin() + n);
+    }
     std::vector<std::string> tokens(2, "");
     /* split command */
-    for (size_t i = 0, j = 0; j < 2 && i < command.length(); ++i) {
+    for (size_t i = 0, j = 0; j < 2 && i < command.size(); ++i) {
         if (command.at(i) == ' ' || command.at(i) == '\n') {
             ++j;
         } else {
@@ -37,7 +88,7 @@ void ClientNode::readUserInput() {
 void ClientNode::discover() {
     SimpleGreetMessage message{};
     Node::getConnection()->broadcast(message.getRawData());
-    // wait for TTL for responses (create new thread with getting responses and wait here?
+    // wait for TTL for responses
     auto response = Node::getConnection()->waitForResponse();
     try {
         auto responseMessage = MessageBuilder().build(response.getBuffer(), 0);
@@ -95,15 +146,16 @@ void ClientNode::fetch(const std::string &s) {
     servers->second.push(provider);
 
     try {
-        // TCP
-        // download file
-
-        std::cout << "File " << s << " downloaded (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
-                  << ")\n";
-    } catch (std::exception &e) {
+        /* send request for file */
+        this->getConnection()->sendToSocket(provider, message.getRawData());
+    } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
                   << ")" << " Reason: " << e.what();
     }
+}
+
+void ClientNode::fetchFile(ComplexGetMessage message) {
+
 }
 
 void ClientNode::upload(const std::string &s) {
@@ -159,5 +211,10 @@ void ClientNode::exit() {
 
 void ClientNode::addFile(const std::string &filename, sockaddr_in addr) {
     this->files[filename].push(addr);
+}
+
+void ClientNode::addTCPConnection() {
+
+
 }
 

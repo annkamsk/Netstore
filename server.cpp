@@ -9,7 +9,7 @@ void ServerNode::addFile(const std::string &filename, unsigned long long size) {
 
 std::shared_ptr<Connection> ServerNode::startConnection() {
     auto connection = Node::startConnection();
-    connection->openSocket();
+    connection->openUDPSocket(nullptr);
     connection->addToMcast();
     connection->addToLocal(this->getConnection()->getPort());
     return connection;

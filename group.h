@@ -2,6 +2,7 @@
 
 #include <utility>
 #include <boost/algorithm/string.hpp>
+#include <thread>
 
 
 #ifndef SIK2_GROUP_H
@@ -14,7 +15,9 @@ private:
     std::vector<std::string> files;
     std::string folder;
     std::shared_ptr<UDPConnection> connection;
-    std::shared_ptr<TCPConnection> tcp;
+    std::vector<TCPConnection> tcps;
+    std::vector<std::thread> ths;
+
 public:
     Node(std::string mcast, unsigned port, unsigned timeout, std::string folder) :
             folder(std::move(folder)),
@@ -23,9 +26,20 @@ public:
     virtual std::shared_ptr<Connection> startConnection() {
         return this->connection;
     }
-
     std::shared_ptr<UDPConnection> getConnection() {
         return this->connection;
+    }
+
+    const std::vector<TCPConnection> &getTcps() const {
+        return tcps;
+    }
+
+    void addTcp(const TCPConnection &tcp) {
+        this->tcps.emplace_back(tcp);
+    }
+
+    const std::vector<std::thread> &getThs() {
+        return ths;
     }
 
     virtual unsigned long long getMemory() {
