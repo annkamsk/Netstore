@@ -35,3 +35,8 @@ void fatal(const char *fmt, ...)
     fprintf(stderr,"\n");
     exit(EXIT_FAILURE);
 }
+
+void info(const char *fmt)
+{
+    fprintf(stderr, "INFO: here I am %s\n", fmt);
+}

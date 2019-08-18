@@ -5,8 +5,13 @@
 #define SIK2_MESSAGE_H
 
 #include "err.h"
-#include "group.h"
 #include <random>
+#include <memory>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
+
+#include "Connection.h"
 
 class Message {
 private:
@@ -56,13 +61,16 @@ public:
 
     virtual bool isComplex() const { return false; }
 
+    bool isOpeningTCP() const { return cmd == "CAN_ADD" || cmd == "CONNECT_ME"; }
+
     /* returns position of first byte of data part of message */
     virtual uint32_t getDataStart() const { return -1; }
 
-    virtual Message getResponse(const std::shared_ptr<Node> &node) const { (void)node; return Message(nullptr); }
-
     virtual std::string getRawData() const;
 
+    std::shared_ptr<Message> getResponse();
+
+    void completeMessage(int param, std::vector<char> data);
 };
 
 class SimpleMessage : public Message {
@@ -105,85 +113,36 @@ public:
     std::string getRawData() const override;
 };
 
-class SimpleGreetMessage : public SimpleMessage {
-public:
-    SimpleGreetMessage() : SimpleMessage("HELLO") {};
-
-    Message getResponse(const std::shared_ptr<Node> &node) const override;
-};
-
-class ComplexGreetMessage : public ComplexMessage {
-    std::vector<std::string> filenames{};
-public:
-    ComplexGreetMessage() : ComplexMessage("GOOD_DAY") {};
-};
-
-class SimpleListMessage : public SimpleMessage {
-public:
-    SimpleListMessage() : SimpleMessage("LIST") {}
-
-    Message getResponse(const std::shared_ptr<Node> &node) const override;
-};
-
-class MyListMessage : public SimpleMessage {
-public:
-    MyListMessage() : SimpleMessage("MY_LIST") {}
-};
-
-class SimpleGetMessage : public SimpleMessage {
-public:
-    SimpleGetMessage() : SimpleMessage("GET") {}
-    Message getResponse(const std::shared_ptr<Node> &node) const override;
-};
-
-class ComplexGetMessage : public ComplexMessage {
-public:
-    ComplexGetMessage() : ComplexMessage("CONNECT_ME") {}
-};
-
-class SimpleDeleteMessage : public SimpleMessage {
-public:
-    SimpleDeleteMessage() : SimpleMessage("DEL") {}
-};
-
-class RejectAddAnswer : public SimpleMessage {
-public:
-    RejectAddAnswer() : SimpleMessage("NO_WAY") {}
-};
-
-class AcceptAddAnswer : public ComplexMessage {
-public:
-    AcceptAddAnswer() : ComplexMessage("CAN_ADD") {}
-};
-
-class ComplexAddMessage : public ComplexMessage {
-public:
-    ComplexAddMessage() : ComplexMessage("ADD") {}
-};
-
 class MessageBuilder {
-    inline static std::unordered_map<std::string, std::shared_ptr<Message>> messageStrings = {
-            {"HELLO",      std::make_shared<SimpleGreetMessage>()},
-            {"GOOD_DAY",   std::make_shared<ComplexGreetMessage>()},
-            {"LIST",       std::make_shared<SimpleListMessage>()},
-            {"MY_LIST",    std::make_shared<MyListMessage>()},
-            {"GET",        std::make_shared<SimpleGetMessage>()},
-            {"CONNECT_ME", std::make_shared<MyListMessage>()},
-            {"DEL",        std::make_shared<SimpleDeleteMessage>()},
-            {"ADD",        std::make_shared<ComplexAddMessage>()},
-            {"CAN_ADD",    std::make_shared<AcceptAddAnswer>()},
-            {"NO_WAY",     std::make_shared<RejectAddAnswer>()}
+    inline static std::vector<std::string> complexMessages = { "GOOD_DAY", "CONNECT_ME", "ADD", "CAN_ADD"};
+    inline static std::vector<std::string> simpleMessages = { "HELLO", "LIST", "MY_LIST", "GET", "DEL", "NO_WAY"};
+public:
+
+    inline static std::unordered_map<std::string, std::string> responseMap = {
+            {"HELLO", "GOOD_DAY"},
+            {"LIST", "MY_LIST"},
+            {"GET", "CONNECT_ME"},
+            {"DEL", ""},
+            {"ADD", "CAN_ADD|NO_WAY"}
     };
 
 public:
     MessageBuilder() = default;
 
-    std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq = 0);
+    static std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq = 0);
+
+    static bool isComplex(std::string cmd) {
+        return std::any_of(complexMessages.begin(), complexMessages.end(), [&cmd](std::string s) { return s == cmd;});
+    }
+
+    static bool isSimple(std::string cmd) {
+        return std::any_of(simpleMessages.begin(), simpleMessages.end(), [&cmd](std::string s) { return s == cmd;});
+    }
 
 private:
-    std::string parseCmd(const std::vector<char> &data);
+    static std::string parseCmd(const std::vector<char> &data);
 
-    uint64_t parseNum(const std::vector<char> &data, uint32_t from, uint32_t to);
+    static uint64_t parseNum(const std::vector<char> &data, uint32_t from, uint32_t to);
 };
 
 #endif //SIK2_MESSAGE_H

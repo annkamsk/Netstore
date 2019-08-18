@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "Message.h"
 
 std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, uint64_t seq) {
@@ -6,8 +8,13 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, ui
     }
 
     /* set cmd */
-    std::string cmd = this->parseCmd(data);
-    auto message = messageStrings.at(cmd);
+    std::string cmd = MessageBuilder::parseCmd(data);
+    std::shared_ptr<Message> message;
+    if (isComplex(cmd)) {
+        message = std::make_shared<ComplexMessage>(cmd);
+    } else {
+        message = std::make_shared<SimpleMessage>(cmd);
+    }
 
     /* set cmd_seq and, if applicable, check whether it's the same as awaited seq */
     message->setSeq(parseNum(data, 10, 18));
@@ -24,7 +31,7 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, ui
     }
 
     /* set data */
-    message->setData(std::vector(data.begin() + message->getDataStart(), data.end()));
+    message->setData(std::vector<char>(data.begin() + message->getDataStart(), data.end()));
     return message;
 }
 
@@ -37,7 +44,7 @@ std::string MessageBuilder::parseCmd(const std::vector<char> &data) {
     }
 
     /* if the message is not recognised, throw exception */
-    if (messageStrings.find(cmd) == messageStrings.end()) {
+    if (!isComplex(cmd) && !isSimple(cmd)) {
         throw InvalidMessageException();
     }
     return cmd;
@@ -49,33 +56,21 @@ uint64_t MessageBuilder::parseNum(const std::vector<char> &data, uint32_t from, 
                      [](char c) { return isdigit(c); })) {
         throw InvalidMessageException();
     }
-    std::string seq = std::vector(data.begin() + from, data.begin() + to).data();
+    std::string seq = std::vector<char>(data.begin() + from, data.begin() + to).data();
     return std::stoi(seq);
 }
 
-Message SimpleGreetMessage::getResponse(const std::shared_ptr<Node> &node) const {
-    /* set answer parameters */
-    ComplexGreetMessage message;
-    message.setSeq(this->cmd_seq);
-    message.setParam(node->getMemory());
-    auto mcast = node->getConnection()->getMcast();
-    message.setData(std::vector<char>(mcast.begin(), mcast.end()));
-
-    return message;
-}
-
-Message SimpleListMessage::getResponse(const std::shared_ptr<Node> &node) const {
-    MyListMessage message{};
-    message.setSeq(this->cmd_seq);
-    std::vector<char> list{};
-    for (auto f : node->getFiles()) {
-        list.insert(list.end(), f.begin(), f.end());
-        list.push_back('\n');
+std::shared_ptr<Message> Message::getResponse() {
+    std::string responseCmd = MessageBuilder::responseMap.at(this->getCmd());
+    std::shared_ptr<Message> message;
+    if (MessageBuilder::isComplex(responseCmd)) {
+        message = std::make_shared<Message>(ComplexMessage(responseCmd));
+    } else {
+        message = std::make_shared<Message>(SimpleMessage(responseCmd));
     }
-    message.setData(list);
+    message->setSeq(Message::getSeq());
     return message;
 }
-
 
 std::string Message::getRawData() const {
     std::string con(this->cmd);
@@ -87,6 +82,11 @@ std::string Message::getRawData() const {
     return con;
 }
 
+void Message::completeMessage(int param, std::vector<char> data) {
+    this->setParam(param);
+    this->setData(std::move(data));
+}
+
 std::string SimpleMessage::getRawData() const {
     return Message::getRawData() + (this->data.empty() ? "" : this->data.data());
 }
@@ -95,9 +95,3 @@ std::string ComplexMessage::getRawData() const {
     return Message::getRawData() + std::to_string(this->param) + this->data.data();
 }
 
-Message SimpleGetMessage::getResponse(const std::shared_ptr<Node> &node) const {
-    ComplexGetMessage message{};
-    message.setSeq(this->getCmdSeq());
-    message.setData(this->getData());
-
-}

@@ -58,21 +58,7 @@ public:
 
 };
 
-class IConnection {
-public:
-    virtual void openSocket() = 0;
-
-    virtual ConnectionResponse readFromSocket() = 0;
-
-    virtual int getSock() = 0;
-
-    virtual void sendToSocket(struct sockaddr_in rec, std::string data) = 0;
-
-    virtual std::string getMcast() const = 0;
-
-};
-
-class Connection : public IConnection {
+class Connection {
 protected:
     static const unsigned N = 50;
     std::string mcast{};
@@ -80,7 +66,6 @@ protected:
     uint16_t port{};
     unsigned int ttl{};
     struct ip_mreq ip_mreq{};
-    int masterSock{}, sockets[N]{};
 
 public:
     Connection() = default;
@@ -89,15 +74,11 @@ public:
                                                                      port(port),
                                                                      ttl(ttl) {}
 
-    int getSock() override {
-        return this->masterSock;
-    }
-
     unsigned getTTL() {
         return this->ttl;
     }
 
-    std::string getMcast() const override {
+    std::string getMcast() const {
         return this->mcast;
     }
 
@@ -105,55 +86,24 @@ public:
         return port;
     }
 
-    void openUDPSocket();
+    int openUDPSocket();
 
-    virtual void addToLocal(unsigned port);
+    int openTCPSocket();
 
-    void detachFromGroup();
+    static ConnectionResponse readFromUDPSocket(int sock);
 
-    void closeSocket();
+    static void sendToSocket(int sock, sockaddr_in address, std::string data);
 
-    void addToMcast();
+    static int getPort(int sock) {
+        struct sockaddr_in sin{};
+        int addrlen = sizeof(sin);
+        getsockname(sock, (struct sockaddr *)&sin, (socklen_t *) &addrlen);
+        return sin.sin_port;
+    }
 
-    void activateBroadcast();
+    static void closeSocket(int sock);
 
-    void setReceiver();
-
-    virtual void broadcast(std::string data);
-
-    ConnectionResponse waitForResponse();
-
-    int openTCPSocket(int port, std::string ip);
-
-    std::vector<char> receiveFile(int sock);
-};
-
-class UDPConnection : public Connection {
-public:
-    UDPConnection(std::string mcast, uint16_t port, unsigned int ttl) : Connection(std::move(mcast), port, ttl) {}
-
-    void openSocket() override;
-
-    ConnectionResponse readFromSocket() override;
-
-    void sendToSocket(struct sockaddr_in rec, std::string data) override;
-
-    void broadcast(std::string data) override;
-};
-
-class TCPConnection : public Connection {
-    static const int N = 20;
-    struct pollfd fds[N]{ -1, POLLIN, 0 };
-public:
-    TCPConnection() = default;
-
-    void openSocket() override;
-    void addToLocal(unsigned port) override;
-
-    void setToListen();
-
-    ConnectionResponse readFromSocket() override;
-
+    static std::vector<char> receiveFile(int sock);
 };
 
 #endif //SIK2_CONNECTION_H

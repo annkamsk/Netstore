@@ -1,14 +1,15 @@
 #include <iostream>
 #include <boost/program_options.hpp>
-#include <filesystem>
+#include <experimental/filesystem>
 #include <csignal>
 
 #include "server.h"
-#include "Message.h"
 
 using std::string;
 namespace po = boost::program_options;
-namespace fs = std::filesystem;
+namespace fs = std::experimental::filesystem;
+
+std::shared_ptr<ServerNode> server;
 
 void invalid_option(const string &where, const string &val) {
     throw po::validation_error(po::validation_error::invalid_option_value,
@@ -64,29 +65,32 @@ void indexFiles(const std::shared_ptr<ServerNode>& server) {
     }
 }
 
-static void handleInterrupt(const std::shared_ptr<Connection>& connection) {
-    std::cout << "Server interrupted!" << std::endl;
-    connection->detachFromGroup();
-    connection->closeSocket();
+
+void handleInterrupt(int s) {
+    std::cerr << "Caught signal " << s << ". Closing sockets.";
+    server->closeConnections();
 }
 
 int main(int argc, char *argv[]) {
-    auto server = readOptions(argc, argv);
+    server = readOptions(argc, argv);
     indexFiles(server);
 
-    auto connection = server->startConnection();
+    struct sigaction sigIntHandler{};
+    sigIntHandler.sa_handler = handleInterrupt;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
+    sigaction(SIGINT, &sigIntHandler, NULL);
+
+    server->createConnection();
+
     for (;;) {
-        auto response = connection->readFromSocket();
         try {
-            auto message = MessageBuilder().build(response.getBuffer(), 0);
-            auto responseMessage = message->getResponse(server);
-            connection->sendToSocket(response.getCliaddr(), responseMessage.getRawData());
+            server->listen();
         } catch (const InvalidMessageException& e) {
             std::cout << e.what() << std::endl;
         } catch (const PartialSendException& e) {
             std::cout << e.what() << std::endl;
         }
     }
-    handleInterrupt(connection);
     return 0;
 }

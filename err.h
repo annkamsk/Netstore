@@ -13,6 +13,8 @@ extern void syserr(const char *fmt, ...);
 /* wypisuje informacje o bledzie i konczy dzialanie */
 extern void fatal(const char *fmt, ...);
 
+extern void info(const char *fmt, ...);
+
 class NetstoreException : public std::exception {
     std::string message;
 public:
