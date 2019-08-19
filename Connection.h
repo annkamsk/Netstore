@@ -65,7 +65,9 @@ protected:
     std::string local;
     uint16_t port{};
     unsigned int ttl{};
-    struct ip_mreq ip_mreq{};
+
+    struct ip_mreq ip_mreq{}; // for server for listening to group
+    struct sockaddr_in remote_address{}; // for client for sending to group
 
 public:
     Connection() = default;
@@ -104,6 +106,12 @@ public:
     static void closeSocket(int sock);
 
     static std::vector<char> receiveFile(int sock);
+
+    void setReceiver();
+
+    void multicast(int sock, std::string data);
+
+    void addToMulticast(int sock);
 };
 
 #endif //SIK2_CONNECTION_H

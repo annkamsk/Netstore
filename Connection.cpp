@@ -7,6 +7,18 @@ int Connection::openUDPSocket() {
         syserr("socket");
     }
 
+    /* bind */
+    struct sockaddr_in local_address{};
+    local_address.sin_family = AF_INET;
+    local_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    local_address.sin_port = htons(this->port);
+    if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
+        syserr("bind");
+    }
+    return sock;
+}
+
+void Connection::addToMulticast(int sock) {
     /* setting multicast address */
     char *multicast_dotted_address = this->mcast.data();
     ip_mreq.imr_interface.s_addr = htonl(INADDR_ANY);
@@ -18,25 +30,11 @@ int Connection::openUDPSocket() {
         syserr("setsockopt");
     }
 
-    /* set TTL */
-    uint optval = this->ttl;
-    setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (void *) &optval, sizeof(optval));
-
     /* block multicast to yourself */
-    optval = 0;
+    int optval = 0;
     if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void *) &optval, sizeof optval) < 0) {
         syserr("setsockopt loop");
     }
-
-    /* bind */
-    struct sockaddr_in local_address{};
-    local_address.sin_family = AF_INET;
-    local_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    local_address.sin_port = htons(this->port);
-    if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
-        syserr("bind");
-    }
-    return sock;
 }
 
 int Connection::openTCPSocket() {
@@ -57,6 +55,22 @@ int Connection::openTCPSocket() {
         syserr("listen");
     }
     return sock;
+}
+
+void Connection::setReceiver() {
+    char *remote_dotted_address = this->mcast.data();
+
+    remote_address.sin_family = AF_INET;
+    remote_address.sin_port = htons(this->port);
+    if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
+        syserr("inet_aton");
+    }
+}
+
+void Connection::multicast(int sock, std::string data) {
+    if (sendto(sock, data.data(), data.size(), 0, (struct sockaddr*) &remote_address, sizeof(remote_address)) < 0) {
+        syserr("sendto");
+    }
 }
 
 ConnectionResponse Connection::readFromUDPSocket(int sock) {

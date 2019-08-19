@@ -1,97 +1,39 @@
 #include <fstream>
 #include "client.h"
 
-void ClientNode::startUserInput() {
-    /* set file descriptor for user input */
-    this->fds[ite++] = {0, POLLIN, 0};
-
-}
-
-std::shared_ptr<Connection> ClientNode::startConnection() {
-    std::shared_ptr<Connection> connection = Node::getConnection();
-    connection->openUDPSocket();
-    connection->activateBroadcast();
-    connection->addToLocal(0);
-    connection->setReceiver();
-    int timeout = connection->getTTL();
-    this->fds[ite++] = {connection->getSock(), POLLIN, (short) timeout};
-    return connection;
-}
-
-void ClientNode::readInput() {
-    int ret;
-    if ((ret = poll(fds, ite, 1000)) < 0) {
-        syserr("poll");
-    }
-    /* if there is user input */
-    if (ret > 0 && (fds[0].revents & POLLIN)) {
-        fds[0].revents = 0;
-        readUserInput();
-        /* if there is UDP packet */
-    } else if (ret > 0 && (fds[1].revents & POLLIN)) {
-        fds[1].revents = 0;
-        ConnectionResponse response = getConnection()->readFromSocket();
-        auto responseMessage = MessageBuilder().build(response.getBuffer(), -1);
-
-        if (responseMessage->getCmd() == "CONNECT_ME") {
-            /* start TCP connection */
-            this->fds[ite++] = {this->getConnection()->openTCPSocket(
-                    responseMessage->getParam(),
-                    inet_ntoa(response.getCliaddr().sin_addr)), POLLIN, 0};
-        }
-        /* if there is TCP data */
-    } else if (ret > 0) {
-        for (ssize_t i = 2; i < N; ++i) {
-            if (fds[i].revents & POLLIN) {
-                getThs().emplace_back(std::thread([=](int sock, std::string path, sockaddr_in addr) {
-                    auto data = this->getConnection()->receiveFile(sock);
-                    auto responseMessage = MessageBuilder().build(data, fdToSeq[sock]);
-                    std::ofstream ofs(path);
-                    ofs << data.data();
-                    std::cout << "File " << path << " downloaded (" << inet_ntoa(addr.sin_addr) << ":" << addr.sin_port
-                              << ")\n";
-                }), fds[i].fd, this->getFolder())
-            }
-        }
-    }
-
-}
-
 void ClientNode::readUserInput() {
-    std::vector<char> command;
-    std::vector<char> buffer(N);
-    int n;
-    while ((n = read(fds[0].fd, &buffer[0], N))) {
-        command.insert(command.end(), buffer.begin(), buffer.begin() + n);
-    }
-    std::vector<std::string> tokens(2, "");
-    /* split command */
-    for (size_t i = 0, j = 0; j < 2 && i < command.size(); ++i) {
-        if (command.at(i) == ' ' || command.at(i) == '\n') {
-            ++j;
-        } else {
-            tokens.at(j) += command.at(i);
-        }
-    }
+    std::string input;
+    std::cin >> input;
+
+    size_t n = input.find(' ');
+    std::string command = n == std::string::npos ? input : input.substr(0, n);
+    std::string args = input.substr(n + 1, input.size());
 
     /* client should be case insensitive, so let's transform string to lower case */
-    std::transform(tokens.at(0).begin(), tokens.at(0).end(), tokens.at(0).begin(), ::tolower);
+    std::transform(command.begin(), command.end(), command.begin(), ::tolower);
 
     /* if input is not of form: 'command( \w+)\n' */
-    if (this->commands.find(tokens.at(0)) == this->commands.end()) {
+    if (this->commands.find(command) == this->commands.end()) {
         throw InvalidInputException();
     }
+
     /* execute function associated with given command */
-    commands.at(tokens.at(0))(tokens.at(1));
+    this->commands.at(command)(args);
+}
+
+void ClientNode::startConnection() {
+    this->sock = connection->openUDPSocket();
+    connection->setReceiver();
 }
 
 void ClientNode::discover() {
-    SimpleGreetMessage message{};
-    Node::getConnection()->broadcast(message.getRawData());
-    // wait for TTL for responses
-    auto response = Node::getConnection()->waitForResponse();
+    SimpleMessage message("HELLO");
+    this->connection->multicast(this->sock, message.getRawData());
+
+    // TODO wait for TTL for responses
+    auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder().build(response.getBuffer(), 0);
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), 0);
         std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
                   << ") with free space " << responseMessage->getParam() << "\n";
 //    Dla każdego odnalezionego serwera klient powinien wypisać na standardowe wyjście w jednej linii adres jednostkowy IP tego serwera,
@@ -107,12 +49,14 @@ void ClientNode::discover() {
 
 
 void ClientNode::search(const std::string &s) {
-    auto message = SimpleListMessage();
+    auto message = SimpleMessage("LIST");
     message.setData(std::vector<char>(s.begin(), s.end()));
-    Node::getConnection()->broadcast(message.getRawData());
-    auto response = Node::getConnection()->waitForResponse();
+    this->connection->multicast(this->sock, message.getRawData());
+
+    // TODO wait TTL for response
+    auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder().build(response.getBuffer(), message.getCmdSeq());
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message.getCmdSeq());
 
         /* get filenames from data */
         std::vector<std::string> filenames;
@@ -137,7 +81,7 @@ void ClientNode::fetch(const std::string &s) {
         std::cout << "File " << s << " was not found on any server.\n";
         return;
     }
-    auto message = SimpleGetMessage();
+    auto message = SimpleMessage("GET");
     message.setData(std::vector<char>(s.begin(), s.end()));
 
     /* choose provider and move it to the end of queue */
@@ -154,7 +98,7 @@ void ClientNode::fetch(const std::string &s) {
     }
 }
 
-void ClientNode::fetchFile(ComplexGetMessage message) {
+void ClientNode::fetchFile(ComplexMessage message) {
 
 }
 
@@ -198,9 +142,9 @@ void ClientNode::remove(const std::string &s) {
     if (s.empty()) {
         throw InvalidInputException();
     }
-    auto message = SimpleDeleteMessage();
+    auto message = SimpleMessage("DELETE");
     message.setData(std::vector(s.begin(), s.end()));
-    this->getConnection()->broadcast(message.getRawData());
+    this->connection->multicast(message.getRawData());
     std::cout << "Request to remove file " + s + " sent.\n";
 }
 
@@ -211,10 +155,5 @@ void ClientNode::exit() {
 
 void ClientNode::addFile(const std::string &filename, sockaddr_in addr) {
     this->files[filename].push(addr);
-}
-
-void ClientNode::addTCPConnection() {
-
-
 }
 

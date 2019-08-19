@@ -51,14 +51,12 @@ ClientNode readOptions(int argc, char **argv) {
 
 int main(int argc, char *argv[]) {
     ClientNode client = readOptions(argc, argv);
-
-    client.startUserInput();
-    auto connection = client.startConnection();
+    client.startConnection();
 
     for (;;) {
         try {
             std::cout <<"Write a command: \n";
-            client.readInput();
+            client.readUserInput();
 
         } catch (InvalidInputException &e) {
             std::cout << e.what();

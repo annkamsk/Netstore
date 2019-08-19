@@ -50,7 +50,9 @@ public:
 };
 
 void ServerNode::createConnection() {
-    fds.insert(fds.begin(), {connection->openUDPSocket(), POLLIN, 0});
+    int sock = connection->openUDPSocket();
+    connection->addToMulticast(sock);
+    fds.insert(fds.begin(), {sock, POLLIN, 0});
 }
 
 void ServerNode::listen() {
