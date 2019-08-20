@@ -19,19 +19,20 @@ int Connection::openUDPSocket() {
 }
 
 void Connection::addToMulticast(int sock) {
-    /* setting multicast address */
-    char *multicast_dotted_address = this->mcast.data();
-    ip_mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-
-    if (inet_aton(multicast_dotted_address, &ip_mreq.imr_multiaddr) == 0) {
-        syserr("inet_aton");
+    /* allow port to be used my multiple sockets */
+    int optval = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*) &optval, sizeof(optval)) < 0){
+        syserr("Reusing ADDR failed");
     }
-    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *) &this->ip_mreq, sizeof this->ip_mreq) < 0) {
+    /* setting multicast address */
+    ip_mreq.imr_multiaddr.s_addr = inet_addr(this->mcast.data());
+    ip_mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*) &ip_mreq, sizeof(ip_mreq)) < 0){
         syserr("setsockopt");
     }
 
     /* block multicast to yourself */
-    int optval = 0;
+    optval = 0;
     if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void *) &optval, sizeof optval) < 0) {
         syserr("setsockopt loop");
     }
@@ -77,7 +78,7 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     ConnectionResponse response{};
     std::vector<char> buffer(Netstore::MAX_SMPL_CMD_SIZE);
     socklen_t len;
-    std::cout << "reading";
+    std::cout << "reading new message...\n";
     ssize_t singleLen = recvfrom(sock, &buffer[0], buffer.size(), 0, (struct sockaddr *) &response.getCliaddr(), &len);
 
     if (singleLen < 0) {

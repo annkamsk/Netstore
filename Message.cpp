@@ -16,6 +16,8 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, ui
         message = std::make_shared<SimpleMessage>(cmd);
     }
 
+    std::cerr << cmd;
+
     /* set cmd_seq and, if applicable, check whether it's the same as awaited seq */
     message->setSeq(parseNum(data, 10, 18));
     if (seq != 0 && message->getCmdSeq() != seq) {
@@ -39,10 +41,9 @@ std::string MessageBuilder::parseCmd(const std::vector<char> &data) {
     /* get alpha chars from first 10 chars of data */
     std::string cmd;
     for (auto ite = data.begin(); ite < data.begin() + 10; ++ite) {
-        if (!isalpha(*ite)) break;
+        if (!isalpha(*ite) && *ite != '_') break;
         cmd.push_back(*ite);
     }
-
     /* if the message is not recognised, throw exception */
     if (!isComplex(cmd) && !isSimple(cmd)) {
         throw InvalidMessageException();
@@ -57,6 +58,8 @@ uint64_t MessageBuilder::parseNum(const std::vector<char> &data, uint32_t from, 
         throw InvalidMessageException();
     }
     std::string seq = std::vector<char>(data.begin() + from, data.begin() + to).data();
+
+    std::cerr << seq <<"\n";
     return std::stoi(seq);
 }
 
@@ -83,7 +86,7 @@ std::string Message::getRawData() const {
 }
 
 void Message::completeMessage(int param, std::vector<char> data) {
-    this->setParam(param);
+    this->setParam(htonl(param));
     this->setData(std::move(data));
 }
 

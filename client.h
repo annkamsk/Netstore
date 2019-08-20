@@ -1,15 +1,16 @@
-#include <utility>
-
 #ifndef SIK2_CLIENT_H
-#define SIK2_CLIENT_H
 
-#include "Message.h"
+#define SIK2_CLIENT_H
 #include <wait.h>
+#include <utility>
+#include <fstream>
 #include <boost/algorithm/string.hpp>
-#include <filesystem>
+#include <experimental/filesystem>
 #include <queue>
 
-namespace fs = std::filesystem;
+#include "Message.h"
+
+namespace fs = std::experimental::filesystem;
 
 class ClientNode {
 private:
@@ -35,14 +36,16 @@ private:
             {"exit",     [=](const std::string &s) { this->exit(); }}
     };
     std::shared_ptr<Connection> connection;
-    int sock;
+    int sock{};
+    std::unordered_map<std::string, std::queue<sockaddr_in>> files{};
 
     std::string folder;
     struct pollfd fds[N]{-1, POLLIN, 0};
 
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
-            connection(std::make_shared<Connection>(mcast, port, timeout)), folder(std::move(folder)) {}
+            connection(std::make_shared<Connection>(mcast, port, timeout)),
+            folder(std::move(folder)) {}
 
     void addFile(const std::string &filename, sockaddr_in addr);
 

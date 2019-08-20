@@ -1,4 +1,3 @@
-#include <fstream>
 #include "client.h"
 
 void ClientNode::readUserInput() {
@@ -22,7 +21,9 @@ void ClientNode::readUserInput() {
 }
 
 void ClientNode::startConnection() {
-    this->sock = connection->openUDPSocket();
+    if ((this->sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        syserr("socket");
+    }
     connection->setReceiver();
 }
 
@@ -33,7 +34,7 @@ void ClientNode::discover() {
     // TODO wait for TTL for responses
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), 0);
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message.getCmdSeq());
         std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
                   << ") with free space " << responseMessage->getParam() << "\n";
 //    Dla każdego odnalezionego serwera klient powinien wypisać na standardowe wyjście w jednej linii adres jednostkowy IP tego serwera,
@@ -91,7 +92,7 @@ void ClientNode::fetch(const std::string &s) {
 
     try {
         /* send request for file */
-        this->getConnection()->sendToSocket(provider, message.getRawData());
+//        this->connection->sendToSocket(provider, message.getRawData());
     } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
                   << ")" << " Reason: " << e.what();
@@ -111,31 +112,31 @@ void ClientNode::upload(const std::string &s) {
     }
 
     /* get servers with max memory space */
-    auto max = space.rbegin();
-
-    /* check if there is enough place */
-    uint64_t size = fs::file_size(file);
-    if (size > max->first) {
-        std::cout << "File " << s << " too big\n";
-        return;
-    }
-
-    auto dest = max->second.front();
-    max->second.pop();
-
-    try {
-
-        // upload - not blocking
-        std::cout << "File " << s << " uploaded (" << inet_ntoa(dest.sin_addr) << ":" << dest.sin_port << ")\n";
-
-        /* index new file and server with new spare space */
-        this->files[s].push(dest);
-        uint64_t spaceLeft = max->first - size;
-        this->space[spaceLeft].push(dest);
-    } catch (std::exception &e) {
-        std::cout << "File " << s << " uploading failed (" << inet_ntoa(dest.sin_addr) << ":" << dest.sin_port
-                  << ") Reason: " << e.what();
-    }
+//    auto max = space.rbegin();
+//
+//    /* check if there is enough place */
+//    uint64_t size = fs::file_size(file);
+//    if (size > max->first) {
+//        std::cout << "File " << s << " too big\n";
+//        return;
+//    }
+//
+//    auto dest = max->second.front();
+//    max->second.pop();
+//
+//    try {
+//
+//        // upload - not blocking
+//        std::cout << "File " << s << " uploaded (" << inet_ntoa(dest.sin_addr) << ":" << dest.sin_port << ")\n";
+//
+//        /* index new file and server with new spare space */
+//        this->files[s].push(dest);
+//        uint64_t spaceLeft = max->first - size;
+//        this->space[spaceLeft].push(dest);
+//    } catch (std::exception &e) {
+//        std::cout << "File " << s << " uploading failed (" << inet_ntoa(dest.sin_addr) << ":" << dest.sin_port
+//                  << ") Reason: " << e.what();
+//    }
 }
 
 void ClientNode::remove(const std::string &s) {
@@ -143,8 +144,8 @@ void ClientNode::remove(const std::string &s) {
         throw InvalidInputException();
     }
     auto message = SimpleMessage("DELETE");
-    message.setData(std::vector(s.begin(), s.end()));
-    this->connection->multicast(message.getRawData());
+    message.setData(std::vector<char>(s.begin(), s.end()));
+    this->connection->multicast(this->sock, message.getRawData());
     std::cout << "Request to remove file " + s + " sent.\n";
 }
 

@@ -24,7 +24,7 @@ protected:
     static uint64_t getSeq() {
         static std::random_device rd;
         static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<uint64_t> dis(1, UINT64_MAX);
+        static std::uniform_int_distribution<uint64_t> dis(1, 200);
         return dis(gen);
     }
 

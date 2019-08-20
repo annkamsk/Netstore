@@ -20,7 +20,7 @@ public:
                std::string folder) :
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
-            fds(std::vector<pollfd>(N, {0, POLLIN, 0})),
+            fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
             memory(memory){};
 
     unsigned long long getMemory() {
@@ -40,8 +40,6 @@ public:
 
     void listen();
 
-    void handleConnection(int sock);
-
     void handleUDPConnection(int sock);
 
     void handleTCPConnection(int sock);
@@ -58,22 +56,17 @@ void ServerNode::createConnection() {
 void ServerNode::listen() {
     poll(&fds[0], N, -1);
 
+    /* handle event on a UDP socket */
     if (fds[0].revents & POLLIN) {
         fds[0].revents = 0;
-        int s = accept(fds[0].fd, NULL, 0);
-        /* umieść deskryptor s w tablicy fds */
-        for (int i = 1; i < N; ++i) {
-            if (fds[i].fd == -1) {
-                fds[i].fd = s;
-            }
-        }
+        this->handleUDPConnection(fds[0].fd);
     }
 
     for (int k = 1; k < N; ++k) {
         if ((fds[k].revents & POLLIN) | POLLERR) {
             fds[k].revents = 0;
             /* obsłuż klienta na gnieździe fds[k].fd */
-            this->handleConnection(fds[k].fd);
+            this->handleTCPConnection(fds[k].fd);
             /* jeżeli read przekaże 0, usuń pozycję k z fds */
 
         } else if (timeout.find(fds[k].fd) != timeout.end()) {
@@ -84,51 +77,35 @@ void ServerNode::listen() {
     }
 }
 
-void ServerNode::handleConnection(int sock) {
-    int type;
-    int length = sizeof(int);
-
-    /* check if it's UDP or TCP socket */
-    if (getsockopt(sock, SOL_SOCKET, SO_TYPE, &type, (socklen_t *) &length) < 0) {
-        syserr("getsockopt");
-    }
-
-    if (type == SOCK_STREAM) {
-        handleTCPConnection(sock);
-    } else {
-        handleUDPConnection(sock);
-    }
-}
-
 void ServerNode::handleTCPConnection(int sock) {
     std::vector<char> data = this->connection->receiveFile(sock);
     // save file
 }
 
 void ServerNode::handleUDPConnection(int sock) {
-    auto response = this->connection->readFromUDPSocket(sock);
-    auto message = MessageBuilder::build(response.getBuffer(), 0);
-    auto responseMessage = message->getResponse();
+    auto request = this->connection->readFromUDPSocket(sock);
+    auto message = MessageBuilder::build(request.getBuffer(), 0);
+    auto response = message->getResponse();
 
-    if (responseMessage->getCmd() == "MY_LIST") {
+    if (response->getCmd() == "MY_LIST") {
         std::vector<char> data{};
         for (auto f : files) {
             data.insert(data.end(), f.begin(), f.end());
             data.push_back('\n');
         }
-        responseMessage->setData(data);
-    } else if (responseMessage->getCmd() == "GOOD_DAY") {
-        responseMessage->completeMessage(memory,
+        response->setData(data);
+    } else if (response->getCmd() == "GOOD_DAY") {
+        response->completeMessage(memory,
                                          std::vector<char>(connection->getMcast().begin(),
                                                            connection->getMcast().end()));
-    } else if (responseMessage->isOpeningTCP()) {
+    } else if (response->isOpeningTCP()) {
         int tcp = connection->openTCPSocket();
         fds.push_back({tcp, POLLIN, 0});
         timeout.insert({tcp, std::clock()});
         // save file name with socket
-        responseMessage->completeMessage(Connection::getPort(tcp), message->getData());
+        response->completeMessage(Connection::getPort(tcp), message->getData());
     }
-    connection->sendToSocket(sock, response.getCliaddr(), responseMessage->getRawData());
+    connection->sendToSocket(sock, request.getCliaddr(), response->getRawData());
 }
 
 void ServerNode::closeConnections() {

@@ -1,14 +1,11 @@
 #include <iostream>
 #include <boost/program_options.hpp>
-#include <filesystem>
 #include <csignal>
 
-#include "Message.h"
 #include "client.h"
 
 using std::string;
 namespace po = boost::program_options;
-namespace fs = std::filesystem;
 
 void invalid_option(const string &where, const string &val) {
     throw po::validation_error(po::validation_error::invalid_option_value,
