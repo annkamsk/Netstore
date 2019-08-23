@@ -5,21 +5,26 @@
 #define SIK2_MESSAGE_H
 
 #include "err.h"
-#include <random>
-#include <memory>
-#include <unordered_map>
-#include <vector>
-#include <algorithm>
 
-#include "Connection.h"
+struct __attribute__((__packed__)) SimpleMessageRaw {
+    char cmd[10];
+    uint64_t seq;
+    char data[1024];
+};
+
+struct __attribute__((__packed__)) ComplexMessageRaw {
+    char cmd[10];
+    uint64_t seq;
+    uint64_t param;
+    char data[1024];
+};
 
 class Message {
-private:
-
-protected:
     std::string cmd;
-    uint64_t cmd_seq{}; // TODO bigendian
+    uint64_t cmd_seq{}; // big endian
+    uint64_t param{}; // big endian
     std::vector<char> data;
+    bool isComplex;
 
     static uint64_t getSeq() {
         static std::random_device rd;
@@ -29,14 +34,35 @@ protected:
     }
 
 public:
-    explicit Message(std::string cmd) : cmd(std::move(cmd)), cmd_seq(getSeq()) {}
+    Message(std::string cmd, bool isComplex) : cmd(std::move(cmd)), cmd_seq(getSeq()), isComplex(isComplex) {}
+
+    bool isMessageComplex() const { return isComplex; }
+
+    bool isOpeningTCP() const { return cmd == "CAN_ADD" || cmd == "CONNECT_ME"; }
+
+    /* returns position of first byte of data part of message */
+    uint32_t getDataStart() const { return isComplex ? 26 : 18; }
+
+    std::shared_ptr<Message> getResponse();
+
+    void completeMessage(int par, std::vector<char> dat);
+
+    SimpleMessageRaw getSimpleMessageRaw();
+
+    ComplexMessageRaw getComplexMessageRaw();
+
+    /* setters, getters */
 
     void setSeq(uint64_t seq) {
         this->cmd_seq = seq;
     }
 
     void setData(std::vector<char> dat) {
-        this->data = dat;
+        this->data = std::move(dat);
+    }
+
+    const std::vector<char> &getData() const {
+        return data;
     }
 
     const std::string &getCmd() const {
@@ -51,66 +77,9 @@ public:
         cmd_seq = cmdSeq;
     }
 
-    const std::vector<char> &getData() const {
-        return data;
-    }
+    virtual void setParam(uint64_t par) { this->param = par; }
 
-    virtual void setParam(uint64_t par) { (void)par; }
-
-    virtual uint64_t getParam() const { return 0;}
-
-    virtual bool isComplex() const { return false; }
-
-    bool isOpeningTCP() const { return cmd == "CAN_ADD" || cmd == "CONNECT_ME"; }
-
-    /* returns position of first byte of data part of message */
-    virtual uint32_t getDataStart() const { return -1; }
-
-    virtual std::string getRawData() const;
-
-    std::shared_ptr<Message> getResponse();
-
-    void completeMessage(int param, std::vector<char> data);
-};
-
-class SimpleMessage : public Message {
-public:
-    explicit SimpleMessage(const std::string& cmd) : Message(cmd) {};
-
-    bool isComplex() const override {
-        return false;
-    }
-
-    uint64_t getParam() const override { return 0; }
-
-    uint32_t getDataStart() const override {
-        return 18;
-    }
-
-    std::string getRawData() const override;
-};
-
-class ComplexMessage : public Message {
-    uint64_t param{}; // bigendian
-
-public:
-    explicit ComplexMessage(const std::string& cmd) : Message(cmd) {};
-
-    bool isComplex() const override {
-        return true;
-    }
-
-    void setParam(uint64_t par) override {
-        this->param = par;
-    }
-
-    uint64_t getParam() const override { return this->param; }
-
-    uint32_t getDataStart() const override {
-        return 26;
-    }
-
-    std::string getRawData() const override;
+    virtual uint64_t getParam() const { return param;}
 };
 
 class MessageBuilder {
@@ -128,6 +97,8 @@ public:
 
 public:
     MessageBuilder() = default;
+
+    static std::shared_ptr<Message> create(std::string cmd);
 
     static std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq = 0);
 

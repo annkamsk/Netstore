@@ -1,8 +1,7 @@
 #ifndef SIK2_SERVER_H
 #define SIK2_SERVER_H
 
-#include "Message.h"
-#include <utility>
+#include "Connection.h"
 
 class ServerNode {
 
@@ -105,7 +104,7 @@ void ServerNode::handleUDPConnection(int sock) {
         // save file name with socket
         response->completeMessage(Connection::getPort(tcp), message->getData());
     }
-    connection->sendToSocket(sock, request.getCliaddr(), response->getRawData());
+    connection->sendToSocket(sock, request.getCliaddr(), response);
 }
 
 void ServerNode::closeConnections() {

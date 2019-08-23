@@ -5,6 +5,32 @@
 
 #include <exception>
 #include <string>
+#include <random>
+#include <memory>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
+#include <list>
+#include <utility>
+#include <map>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <functional>
+#include <iostream>
+#include <cstring>
+#include <poll.h>
+
+namespace Netstore {
+    const static int MIN_SMPL_CMD_SIZE = 18;
+    const static int MIN_CMPLX_CMD_SIZE = 26;
+    /* max SIMPL_CMD size = 10 (cmd) + 8 (seq) + 256 (max filename length) */
+    const static unsigned MAX_SMPL_CMD_SIZE = 274;
+
+    const static unsigned BUFFER_LEN = 2048;
+}
 
 /* wypisuje informacje o blednym zakonczeniu funkcji systemowej
 i konczy dzialanie */

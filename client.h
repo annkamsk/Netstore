@@ -2,13 +2,12 @@
 
 #define SIK2_CLIENT_H
 #include <wait.h>
-#include <utility>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <experimental/filesystem>
 #include <queue>
 
-#include "Message.h"
+#include "Connection.h"
 
 namespace fs = std::experimental::filesystem;
 
@@ -49,7 +48,7 @@ public:
 
     void addFile(const std::string &filename, sockaddr_in addr);
 
-    void fetchFile(ComplexMessage message);
+    void fetchFile(const Message &message);
 
     void readUserInput();
 

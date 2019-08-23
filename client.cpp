@@ -28,19 +28,18 @@ void ClientNode::startConnection() {
 }
 
 void ClientNode::discover() {
-    SimpleMessage message("HELLO");
-    this->connection->multicast(this->sock, message.getRawData());
+    auto message = MessageBuilder::create("HELLO");
+    this->connection->multicast(this->sock, message);
 
     // TODO wait for TTL for responses
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message.getCmdSeq());
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq());
+        // FIXME display client addr properly
         std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
                   << ") with free space " << responseMessage->getParam() << "\n";
-//    Dla każdego odnalezionego serwera klient powinien wypisać na standardowe wyjście w jednej linii adres jednostkowy IP tego serwera,
-//    następnie w nawiasie adres MCAST_ADDR otrzymany od danego serwera, a na końcu rozmiar dostępnej przestrzeni dyskowej na tym serwerze.
+//    adres jednostkowy IP + w nawiasie adres MCAST_ADDR od serwera + rozmiar dostępnej przestrzeni dyskowej na tym serwerze.
 //    Found 10.1.1.28 (239.10.11.12) with free space 23456
-
     } catch (WrongSeqException &e) {
         std::cerr << "[PCKG ERROR]  Skipping invalid package from " << response.getCliaddr().sin_addr.s_addr << ":"
                   << response.getCliaddr().sin_port << ".\n";
@@ -50,14 +49,14 @@ void ClientNode::discover() {
 
 
 void ClientNode::search(const std::string &s) {
-    auto message = SimpleMessage("LIST");
-    message.setData(std::vector<char>(s.begin(), s.end()));
-    this->connection->multicast(this->sock, message.getRawData());
+    auto message = MessageBuilder::create("LIST");
+    message->setData(std::vector<char>(s.begin(), s.end()));
+    this->connection->multicast(this->sock, message);
 
     // TODO wait TTL for response
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message.getCmdSeq());
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq());
 
         /* get filenames from data */
         std::vector<std::string> filenames;
@@ -82,8 +81,8 @@ void ClientNode::fetch(const std::string &s) {
         std::cout << "File " << s << " was not found on any server.\n";
         return;
     }
-    auto message = SimpleMessage("GET");
-    message.setData(std::vector<char>(s.begin(), s.end()));
+    auto message = MessageBuilder::create("GET");
+    message->setData(std::vector<char>(s.begin(), s.end()));
 
     /* choose provider and move it to the end of queue */
     auto provider = servers->second.front();
@@ -99,7 +98,7 @@ void ClientNode::fetch(const std::string &s) {
     }
 }
 
-void ClientNode::fetchFile(ComplexMessage message) {
+void ClientNode::fetchFile(const Message &message) {
 
 }
 
@@ -143,9 +142,9 @@ void ClientNode::remove(const std::string &s) {
     if (s.empty()) {
         throw InvalidInputException();
     }
-    auto message = SimpleMessage("DELETE");
-    message.setData(std::vector<char>(s.begin(), s.end()));
-    this->connection->multicast(this->sock, message.getRawData());
+    auto message = MessageBuilder::create("DELETE");
+    message->setData(std::vector<char>(s.begin(), s.end()));
+    this->connection->multicast(this->sock, message);
     std::cout << "Request to remove file " + s + " sent.\n";
 }
 

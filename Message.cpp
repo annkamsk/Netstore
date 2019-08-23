@@ -9,31 +9,26 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, ui
 
     /* set cmd */
     std::string cmd = MessageBuilder::parseCmd(data);
-    std::shared_ptr<Message> message;
-    if (isComplex(cmd)) {
-        message = std::make_shared<ComplexMessage>(cmd);
-    } else {
-        message = std::make_shared<SimpleMessage>(cmd);
-    }
-
     std::cerr << cmd;
 
-    /* set cmd_seq and, if applicable, check whether it's the same as awaited seq */
-    message->setSeq(parseNum(data, 10, 18));
+    std::shared_ptr<Message> message = create(cmd);
+    if (isComplex(cmd)) {
+        ComplexMessageRaw *mess = (ComplexMessageRaw*) &data[0];
+        message->setSeq(be64toh(mess->seq));
+        message->setParam(be64toh(mess->param));
+        // TODO set data
+    } else {
+        SimpleMessageRaw *mess = (SimpleMessageRaw*) &data[0];
+        message->setSeq(be64toh(mess->seq));
+        // TODO set data
+    }
+    std::cerr <<message->getCmdSeq() << "\n";
+
+    /* if applicable, check whether the seq is the same as the awaited seq */
     if (seq != 0 && message->getCmdSeq() != seq) {
         throw WrongSeqException();
     }
 
-    if (message->isComplex()) {
-        if (data.size() < Netstore::MIN_CMPLX_CMD_SIZE) {
-            throw InvalidMessageException();
-        }
-        /* set param */
-        message->setParam(parseNum(data, 18, 26));
-    }
-
-    /* set data */
-    message->setData(std::vector<char>(data.begin() + message->getDataStart(), data.end()));
     return message;
 }
 
@@ -51,50 +46,39 @@ std::string MessageBuilder::parseCmd(const std::vector<char> &data) {
     return cmd;
 }
 
-uint64_t MessageBuilder::parseNum(const std::vector<char> &data, uint32_t from, uint32_t to) {
-    /* check if number was given */
-    if (!std::all_of(data.begin() + from, data.begin() + to,
-                     [](char c) { return isdigit(c); })) {
-        throw InvalidMessageException();
-    }
-    std::string seq = std::vector<char>(data.begin() + from, data.begin() + to).data();
-
-    std::cerr << seq <<"\n";
-    return std::stoi(seq);
+std::shared_ptr<Message> MessageBuilder::create(std::string cmd) {
+    return isComplex(cmd) ? std::make_shared<Message>(cmd, true) : std::make_shared<Message>(cmd, false);
 }
 
 std::shared_ptr<Message> Message::getResponse() {
     std::string responseCmd = MessageBuilder::responseMap.at(this->getCmd());
-    std::shared_ptr<Message> message;
-    if (MessageBuilder::isComplex(responseCmd)) {
-        message = std::make_shared<Message>(ComplexMessage(responseCmd));
-    } else {
-        message = std::make_shared<Message>(SimpleMessage(responseCmd));
-    }
-    message->setSeq(Message::getSeq());
+    auto message = MessageBuilder().create(responseCmd);
+    message->setSeq(cmd_seq);
     return message;
 }
 
-std::string Message::getRawData() const {
-    std::string con(this->cmd);
-    /* fill spare space with 0's */
-    for (int i = con.size(); i < 10; ++i) {
-        con.push_back(0);
+void Message::completeMessage(int par, std::vector<char> dat) {
+    this->setParam(par);
+    this->setData(std::move(dat));
+}
+
+SimpleMessageRaw Message::getSimpleMessageRaw() {
+    SimpleMessageRaw messageRaw{};
+    for (int i = 0; i < 10; ++i) {
+        messageRaw.cmd[i] = i < this->getCmd().size() ? this->getCmd().at(i) : 0;
     }
-    con += std::to_string(this->cmd_seq);
-    return con;
+    messageRaw.seq = htobe64(this->getCmdSeq());
+
+    return messageRaw;
 }
 
-void Message::completeMessage(int param, std::vector<char> data) {
-    this->setParam(htonl(param));
-    this->setData(std::move(data));
-}
+ComplexMessageRaw Message::getComplexMessageRaw() {
+    ComplexMessageRaw messageRaw{};
+    for (int i = 0; i < 10; ++i) {
+        messageRaw.cmd[i] = i < this->getCmd().size() ? this->getCmd().at(i) : 0;
+    }
+    messageRaw.seq = htobe64(this->getCmdSeq());
 
-std::string SimpleMessage::getRawData() const {
-    return Message::getRawData() + (this->data.empty() ? "" : this->data.data());
-}
-
-std::string ComplexMessage::getRawData() const {
-    return Message::getRawData() + std::to_string(this->param) + this->data.data();
+    return messageRaw;
 }
 

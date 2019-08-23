@@ -1,34 +1,8 @@
 #ifndef SIK2_CONNECTION_H
 #define SIK2_CONNECTION_H
 
-#include <string>
-#include <vector>
-#include <list>
-#include <utility>
-#include <map>
-#include <unordered_map>
-#include <algorithm>
-#include <memory>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <functional>
-#include <iostream>
-#include <cstring>
-#include <poll.h>
-
 #include "err.h"
-
-namespace Netstore {
-    const static int MIN_SMPL_CMD_SIZE = 18;
-    const static int MIN_CMPLX_CMD_SIZE = 26;
-    /* max SIMPL_CMD size = 10 (cmd) + 8 (seq) + 256 (max filename length) */
-    const static unsigned MAX_SMPL_CMD_SIZE = 274;
-
-    const static unsigned BUFFER_LEN = 2048;
-}
+#include "Message.h"
 
 class ConnectionResponse {
     std::vector<char> buffer{};
@@ -67,7 +41,7 @@ protected:
     unsigned int ttl{};
 
     struct ip_mreq ip_mreq{}; // for server for listening to group
-    struct sockaddr_in remote_address{}; // for client for sending to group
+    struct sockaddr_in remote_address{};
 
 public:
     Connection() = default;
@@ -75,6 +49,30 @@ public:
     Connection(std::string mcast, uint16_t port, unsigned int ttl) : mcast(std::move(mcast)),
                                                                      port(port),
                                                                      ttl(ttl) {}
+    int openUDPSocket();
+
+    int openTCPSocket();
+
+    static ConnectionResponse readFromUDPSocket(int sock);
+
+    static void sendToSocket(int sock, sockaddr_in address, const std::shared_ptr<Message>& message);
+
+    static int getPort(int sock) {
+        struct sockaddr_in sin{};
+        int addrlen = sizeof(sin);
+        getsockname(sock, (struct sockaddr *)&sin, (socklen_t *) &addrlen);
+        return sin.sin_port;
+    }
+
+    static void closeSocket(int sock);
+
+    static std::vector<char> receiveFile(int sock);
+
+    void multicast(int sock, const std::shared_ptr<Message>& message);
+
+    void addToMulticast(int sock);
+
+    void setReceiver();
 
     unsigned getTTL() {
         return this->ttl;
@@ -88,30 +86,13 @@ public:
         return port;
     }
 
-    int openUDPSocket();
-
-    int openTCPSocket();
-
-    static ConnectionResponse readFromUDPSocket(int sock);
-
-    static void sendToSocket(int sock, sockaddr_in address, std::string data);
-
-    static int getPort(int sock) {
-        struct sockaddr_in sin{};
-        int addrlen = sizeof(sin);
-        getsockname(sock, (struct sockaddr *)&sin, (socklen_t *) &addrlen);
-        return sin.sin_port;
+    const sockaddr_in &getRemoteAddress() const {
+        return remote_address;
     }
 
-    static void closeSocket(int sock);
-
-    static std::vector<char> receiveFile(int sock);
-
-    void setReceiver();
-
-    void multicast(int sock, std::string data);
-
-    void addToMulticast(int sock);
+    void setRemoteAddress(const sockaddr_in &remoteAddress) {
+        remote_address = remoteAddress;
+    }
 };
 
 #endif //SIK2_CONNECTION_H
