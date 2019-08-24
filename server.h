@@ -22,14 +22,6 @@ public:
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
             memory(memory){};
 
-    unsigned long long getMemory() {
-        return memory;
-    }
-
-    const std::string &getFolder() const {
-        return folder;
-    }
-
     void addFile(const std::string &filename, uint64_t size) {
         this->files.push_back(filename);
         this->memory -= size;
@@ -44,6 +36,16 @@ public:
     void handleTCPConnection(int sock);
 
     void closeConnections();
+
+    std::vector<char> getFiles(const std::vector<char> &s);
+
+    unsigned long long getMemory() {
+        return memory;
+    }
+
+    const std::string &getFolder() const {
+        return folder;
+    }
 };
 
 void ServerNode::createConnection() {
@@ -62,8 +64,9 @@ void ServerNode::listen() {
     }
 
     for (int k = 1; k < N; ++k) {
-        if ((fds[k].revents & POLLIN) | POLLERR) {
+        if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
+            std::cerr << "Revents";
             /* obsłuż klienta na gnieździe fds[k].fd */
             this->handleTCPConnection(fds[k].fd);
             /* jeżeli read przekaże 0, usuń pozycję k z fds */
@@ -83,16 +86,11 @@ void ServerNode::handleTCPConnection(int sock) {
 
 void ServerNode::handleUDPConnection(int sock) {
     auto request = this->connection->readFromUDPSocket(sock);
-    auto message = MessageBuilder::build(request.getBuffer(), 0);
+    auto message = MessageBuilder::build(request.getBuffer(), 0, request.getSize());
     auto response = message->getResponse();
 
     if (response->getCmd() == "MY_LIST") {
-        std::vector<char> data{};
-        for (auto f : files) {
-            data.insert(data.end(), f.begin(), f.end());
-            data.push_back('\n');
-        }
-        response->setData(data);
+        response->setData(getFiles(message->getData()));
     } else if (response->getCmd() == "GOOD_DAY") {
         response->completeMessage(memory,
                                          std::vector<char>(connection->getMcast().begin(),
@@ -111,6 +109,19 @@ void ServerNode::closeConnections() {
     for (auto fd : fds) {
         connection->closeSocket(fd.fd);
     }
+}
+
+std::vector<char> ServerNode::getFiles(const std::vector<char> &s) {
+    std::string searched(s.begin(), s.end());
+    std::vector<char> data{};
+    for (auto f : files) {
+        /* if the filename contains given substring */
+        if (s.empty() || f.find(searched) != std::string::npos) {
+            data.insert(data.end(), f.begin(), f.end());
+            data.push_back('\n');
+        }
+    }
+    return data;
 }
 
 

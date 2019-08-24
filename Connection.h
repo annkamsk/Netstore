@@ -7,11 +7,20 @@
 class ConnectionResponse {
     std::vector<char> buffer{};
     struct sockaddr_in cliaddr{};
+    size_t size{};
 public:
-    ConnectionResponse() = default;
 
+    ConnectionResponse() = default;
     const std::vector<char> &getBuffer() const {
         return buffer;
+    }
+
+    size_t getSize() const {
+        return size;
+    }
+
+    void setSize(size_t size) {
+        ConnectionResponse::size = size;
     }
 
     const char &getBufferAddr() const {

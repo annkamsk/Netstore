@@ -2,32 +2,36 @@
 
 #include "Message.h"
 
-std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, uint64_t seq) {
+std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, uint64_t seq, size_t size) {
     if (data.size() < Netstore::MIN_SMPL_CMD_SIZE) {
         throw InvalidMessageException();
     }
 
     /* set cmd */
     std::string cmd = MessageBuilder::parseCmd(data);
-    std::cerr << cmd;
 
     std::shared_ptr<Message> message = create(cmd);
-    if (isComplex(cmd)) {
-        ComplexMessageRaw *mess = (ComplexMessageRaw*) &data[0];
-        message->setSeq(be64toh(mess->seq));
-        message->setParam(be64toh(mess->param));
-        // TODO set data
-    } else {
-        SimpleMessageRaw *mess = (SimpleMessageRaw*) &data[0];
-        message->setSeq(be64toh(mess->seq));
-        // TODO set data
-    }
-    std::cerr <<message->getCmdSeq() << "\n";
+
+    /* set seq*/
+    uint64_t msg_seq;
+    memcpy(&msg_seq, &data[0] + 10, 8);
+    message->setSeq(be64toh(msg_seq));
 
     /* if applicable, check whether the seq is the same as the awaited seq */
     if (seq != 0 && message->getCmdSeq() != seq) {
         throw WrongSeqException();
     }
+
+    if (isComplex(cmd)) {
+        /* set param */
+        uint64_t param;
+        memcpy(&param, &data[0] + 18, 8);
+        message->setParam(be64toh(param));
+    }
+
+    /* set data */
+    message->setData(std::vector<char>(data.begin() + message->getDataStart(), data.begin() + size));
+    std::cerr << "Message data size : " << message->getData().size();
 
     return message;
 }
@@ -62,23 +66,26 @@ void Message::completeMessage(int par, std::vector<char> dat) {
     this->setData(std::move(dat));
 }
 
-SimpleMessageRaw Message::getSimpleMessageRaw() {
-    SimpleMessageRaw messageRaw{};
-    for (int i = 0; i < 10; ++i) {
-        messageRaw.cmd[i] = i < this->getCmd().size() ? this->getCmd().at(i) : 0;
+char *Message::getRawData() {
+    /* calculate size of message */
+    size_t len = isComplex ? Netstore::MIN_CMPLX_CMD_SIZE : Netstore::MIN_SMPL_CMD_SIZE;
+    len += data.size();
+
+    char *rawData = (char *) malloc(len);
+    /* save the command */
+    for (size_t i = 0; i < 10; ++i) {
+        rawData[i] = i < cmd.size() ? cmd.at(i) : 0;
     }
-    messageRaw.seq = htobe64(this->getCmdSeq());
-
-    return messageRaw;
-}
-
-ComplexMessageRaw Message::getComplexMessageRaw() {
-    ComplexMessageRaw messageRaw{};
-    for (int i = 0; i < 10; ++i) {
-        messageRaw.cmd[i] = i < this->getCmd().size() ? this->getCmd().at(i) : 0;
+    /* save seq */
+    uint64_t seqn = htobe64(cmd_seq);
+    memcpy(rawData + 10, &seqn, sizeof(cmd_seq));
+    /* save param if applicable */
+    if (isComplex) {
+        uint64_t paramn = htobe64(param);
+        memcpy(rawData + 10 + sizeof(cmd_seq), &paramn, sizeof(param));
     }
-    messageRaw.seq = htobe64(this->getCmdSeq());
-
-    return messageRaw;
+    /* save data */
+    memcpy(rawData + getDataStart(), data.data(), data.size());
+    return rawData;
 }
 

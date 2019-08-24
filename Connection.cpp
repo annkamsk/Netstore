@@ -21,13 +21,13 @@ int Connection::openUDPSocket() {
 void Connection::addToMulticast(int sock) {
     /* allow port to be used my multiple sockets */
     int optval = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*) &optval, sizeof(optval)) < 0){
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &optval, sizeof(optval)) < 0) {
         syserr("Reusing ADDR failed");
     }
     /* setting multicast address */
     ip_mreq.imr_multiaddr.s_addr = inet_addr(this->mcast.data());
     ip_mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*) &ip_mreq, sizeof(ip_mreq)) < 0){
+    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &ip_mreq, sizeof(ip_mreq)) < 0) {
         syserr("setsockopt");
     }
 
@@ -68,35 +68,31 @@ void Connection::setReceiver() {
     }
 }
 
-void Connection::multicast(int sock, const std::shared_ptr<Message>& message) {
-    if (message->isMessageComplex()) {
-        ComplexMessageRaw messageRaw = message->getComplexMessageRaw();
-        if (sendto(sock, &messageRaw, sizeof(messageRaw), 0, (struct sockaddr*) &remote_address, sizeof(remote_address)) < 0) {
-            syserr("sendto");
-        }
-    } else {
-        SimpleMessageRaw messageRaw = message->getSimpleMessageRaw();
-        std::cout<< messageRaw.seq <<"\n";
-        if (sendto(sock, &messageRaw, sizeof(messageRaw), 0, (struct sockaddr*) &remote_address, sizeof(remote_address)) < 0) {
-            syserr("sendto");
-        }
+void Connection::multicast(int sock, const std::shared_ptr<Message> &message) {
+    auto data = message->getRawData();
+    std::cout << "Sent: " << data << "\n";
+    if (sendto(sock, data, message->getSize(), 0, (struct sockaddr *) &remote_address,
+               sizeof(remote_address)) < 0) {
+        syserr("sendto");
     }
 }
 
+/* TODO server receives only simple, client not */
 ConnectionResponse Connection::readFromUDPSocket(int sock) {
     ConnectionResponse response{};
     std::vector<char> buffer(Netstore::MAX_SMPL_CMD_SIZE);
     socklen_t len;
     std::cout << "reading new message...\n";
-    ssize_t singleLen = recvfrom(sock, &buffer[0], Netstore::MAX_SMPL_CMD_SIZE, 0, (struct sockaddr *) &response.getCliaddr(), &len);
+    ssize_t singleLen = recvfrom(sock, &buffer[0], Netstore::MAX_SMPL_CMD_SIZE, 0,
+                                 (struct sockaddr *) &response.getCliaddr(), &len);
 
     if (singleLen < 0) {
         syserr("read");
     } else {
-        SimpleMessageRaw *mess = (SimpleMessageRaw*) &buffer[0];
-        std::cout << "read " << singleLen << " bytes: " << mess->cmd << " " << mess->seq << mess->data <<"\n";
+        std::cout << "read " << singleLen << " bytes: " << buffer.data() << "\n";
     }
     response.setBuffer(buffer);
+    response.setSize(singleLen);
     return response;
 }
 
@@ -116,24 +112,27 @@ std::vector<char> Connection::receiveFile(int sock) {
 }
 
 
-void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::shared_ptr<Message>& message) {
+void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::shared_ptr<Message> &message) {
     ssize_t snd_len{};
     if (message->isMessageComplex()) {
-        ComplexMessageRaw messageRaw = message->getComplexMessageRaw();
-        size_t len = sizeof(messageRaw);
+        auto messageRaw = message->getRawData();
+        size_t len = message->getSize();
         snd_len = sendto(sock, &messageRaw, len, 0, (struct sockaddr *) &address, sizeof address);
         if (snd_len != len) {
             throw PartialSendException();
         }
+        std::cout << "Sent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << ": " << messageRaw
+                  << "\n";
     } else {
-        SimpleMessageRaw messageRaw = message->getSimpleMessageRaw();
-        size_t len = sizeof(messageRaw);
+        auto messageRaw = message->getRawData();
+        size_t len = message->getSize();
         snd_len = sendto(sock, &messageRaw, len, 0, (struct sockaddr *) &address, sizeof address);
         if (snd_len != len) {
             throw PartialSendException();
         }
+        std::cout << "Sent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << ": " << messageRaw
+                  << "\n";
     }
-    std::cout << "Sent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << "\n";
 }
 
 void Connection::closeSocket(int sock) {

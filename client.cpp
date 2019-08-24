@@ -2,11 +2,11 @@
 
 void ClientNode::readUserInput() {
     std::string input;
-    std::cin >> input;
+    std::getline(std::cin, input);
 
     size_t n = input.find(' ');
     std::string command = n == std::string::npos ? input : input.substr(0, n);
-    std::string args = input.substr(n + 1, input.size());
+    std::string args = n == std::string::npos ? "" : input.substr(n + 1, input.size());
 
     /* client should be case insensitive, so let's transform string to lower case */
     std::transform(command.begin(), command.end(), command.begin(), ::tolower);
@@ -34,14 +34,13 @@ void ClientNode::discover() {
     // TODO wait for TTL for responses
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq());
-        // FIXME display client addr properly
-        std::cout << "Found " << response.getCliaddr().sin_addr.s_addr << " (" << responseMessage->getData().data()
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), 0);
+        std::cout << "Found " << inet_ntoa(response.getCliaddr().sin_addr) << " (" << responseMessage->getData().data()
                   << ") with free space " << responseMessage->getParam() << "\n";
 //    adres jednostkowy IP + w nawiasie adres MCAST_ADDR od serwera + rozmiar dostępnej przestrzeni dyskowej na tym serwerze.
 //    Found 10.1.1.28 (239.10.11.12) with free space 23456
     } catch (WrongSeqException &e) {
-        std::cerr << "[PCKG ERROR]  Skipping invalid package from " << response.getCliaddr().sin_addr.s_addr << ":"
+        std::cerr << "[PCKG ERROR]  Skipping invalid package from " << inet_ntoa(response.getCliaddr().sin_addr) << ":"
                   << response.getCliaddr().sin_port << ".\n";
 //        Autor programu powinien uzupełnić wiadomość po kropce o dodatkowe informacje opisujące błąd, ale bez użycia znaku nowej linii.
     }
@@ -56,7 +55,7 @@ void ClientNode::search(const std::string &s) {
     // TODO wait TTL for response
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq());
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), 0);
 
         /* get filenames from data */
         std::vector<std::string> filenames;

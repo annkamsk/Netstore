@@ -6,19 +6,6 @@
 
 #include "err.h"
 
-struct __attribute__((__packed__)) SimpleMessageRaw {
-    char cmd[10];
-    uint64_t seq;
-    char data[1024];
-};
-
-struct __attribute__((__packed__)) ComplexMessageRaw {
-    char cmd[10];
-    uint64_t seq;
-    uint64_t param;
-    char data[1024];
-};
-
 class Message {
     std::string cmd;
     uint64_t cmd_seq{}; // big endian
@@ -40,16 +27,18 @@ public:
 
     bool isOpeningTCP() const { return cmd == "CAN_ADD" || cmd == "CONNECT_ME"; }
 
-    /* returns position of first byte of data part of message */
+    /* returns position of first byte of data part of a message */
     uint32_t getDataStart() const { return isComplex ? 26 : 18; }
 
     std::shared_ptr<Message> getResponse();
 
     void completeMessage(int par, std::vector<char> dat);
 
-    SimpleMessageRaw getSimpleMessageRaw();
+    char *getRawData();
 
-    ComplexMessageRaw getComplexMessageRaw();
+    size_t getSize() {
+        return (isComplex ? Netstore::MIN_CMPLX_CMD_SIZE : Netstore::MIN_SMPL_CMD_SIZE) + data.size();
+    }
 
     /* setters, getters */
 
@@ -100,7 +89,7 @@ public:
 
     static std::shared_ptr<Message> create(std::string cmd);
 
-    static std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq = 0);
+    static std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq, size_t size);
 
     static bool isComplex(std::string cmd) {
         return std::any_of(complexMessages.begin(), complexMessages.end(), [&cmd](std::string s) { return s == cmd;});
@@ -112,8 +101,6 @@ public:
 
 private:
     static std::string parseCmd(const std::vector<char> &data);
-
-    static uint64_t parseNum(const std::vector<char> &data, uint32_t from, uint32_t to);
 };
 
 #endif //SIK2_MESSAGE_H
