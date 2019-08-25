@@ -24,6 +24,14 @@ void ClientNode::startConnection() {
     if ((this->sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         syserr("socket");
     }
+    /* bind */
+    struct sockaddr_in local_address{};
+    local_address.sin_family = AF_INET;
+    local_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    local_address.sin_port = htons(8887);
+    if (bind(this->sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
+        syserr("bind");
+    }
     connection->setReceiver();
 }
 
@@ -33,23 +41,24 @@ void ClientNode::discover() {
 
     // TODO wait for TTL for responses
     auto response = this->connection->readFromUDPSocket(this->sock);
+    for (size_t i = 0; i < response.getSize(); ++i) {
+        std::cerr << "[" << (int) response.getBuffer().at(i) << "]" << std::flush;
+    }
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), 0);
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
         std::cout << "Found " << inet_ntoa(response.getCliaddr().sin_addr) << " (" << responseMessage->getData().data()
                   << ") with free space " << responseMessage->getParam() << "\n";
-//    adres jednostkowy IP + w nawiasie adres MCAST_ADDR od serwera + rozmiar dostępnej przestrzeni dyskowej na tym serwerze.
 //    Found 10.1.1.28 (239.10.11.12) with free space 23456
-    } catch (WrongSeqException &e) {
+    } catch (std::exception &e) {
         std::cerr << "[PCKG ERROR]  Skipping invalid package from " << inet_ntoa(response.getCliaddr().sin_addr) << ":"
-                  << response.getCliaddr().sin_port << ".\n";
-//        Autor programu powinien uzupełnić wiadomość po kropce o dodatkowe informacje opisujące błąd, ale bez użycia znaku nowej linii.
+                  << response.getCliaddr().sin_port << ". Reason: " << e.what() << "\n";
     }
 }
 
 
 void ClientNode::search(const std::string &s) {
     auto message = MessageBuilder::create("LIST");
-    message->setData(std::vector<char>(s.begin(), s.end()));
+    message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
 
     // TODO wait TTL for response
@@ -81,7 +90,7 @@ void ClientNode::fetch(const std::string &s) {
         return;
     }
     auto message = MessageBuilder::create("GET");
-    message->setData(std::vector<char>(s.begin(), s.end()));
+    message->setData(std::vector<my_byte>(s.begin(), s.end()));
 
     /* choose provider and move it to the end of queue */
     auto provider = servers->second.front();
@@ -142,7 +151,7 @@ void ClientNode::remove(const std::string &s) {
         throw InvalidInputException();
     }
     auto message = MessageBuilder::create("DELETE");
-    message->setData(std::vector<char>(s.begin(), s.end()));
+    message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
     std::cout << "Request to remove file " + s + " sent.\n";
 }

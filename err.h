@@ -23,6 +23,8 @@
 #include <cstring>
 #include <poll.h>
 
+#define my_byte unsigned char
+
 namespace Netstore {
     const static int MIN_SMPL_CMD_SIZE = 18;
     const static int MIN_CMPLX_CMD_SIZE = 26;
@@ -30,6 +32,7 @@ namespace Netstore {
     const static unsigned MAX_SMPL_CMD_SIZE = 274;
 
     const static unsigned BUFFER_LEN = 2048;
+    const static unsigned MAX_UDP_PACKET_SIZE = 65507;
 }
 
 /* wypisuje informacje o blednym zakonczeniu funkcji systemowej

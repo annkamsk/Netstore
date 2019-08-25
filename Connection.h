@@ -5,13 +5,13 @@
 #include "Message.h"
 
 class ConnectionResponse {
-    std::vector<char> buffer{};
+    std::vector<my_byte> buffer{};
     struct sockaddr_in cliaddr{};
     size_t size{};
 public:
 
     ConnectionResponse() = default;
-    const std::vector<char> &getBuffer() const {
+    const std::vector<my_byte> &getBuffer() const {
         return buffer;
     }
 
@@ -23,15 +23,11 @@ public:
         ConnectionResponse::size = size;
     }
 
-    const char &getBufferAddr() const {
-        return buffer[0];
-    }
-
     const sockaddr_in &getCliaddr() const {
         return cliaddr;
     }
 
-    void setBuffer(const std::vector<char> &buffer) {
+    void setBuffer(const std::vector<my_byte> &buffer) {
         ConnectionResponse::buffer = buffer;
     }
 
@@ -75,7 +71,7 @@ public:
 
     static void closeSocket(int sock);
 
-    static std::vector<char> receiveFile(int sock);
+    static std::vector<my_byte> receiveFile(int sock);
 
     void multicast(int sock, const std::shared_ptr<Message>& message);
 

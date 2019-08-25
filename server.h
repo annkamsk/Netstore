@@ -20,7 +20,7 @@ public:
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
-            memory(memory){};
+            memory(memory) {};
 
     void addFile(const std::string &filename, uint64_t size) {
         this->files.push_back(filename);
@@ -37,7 +37,7 @@ public:
 
     void closeConnections();
 
-    std::vector<char> getFiles(const std::vector<char> &s);
+    std::vector<my_byte> getFiles(const std::vector<my_byte> &s);
 
     unsigned long long getMemory() {
         return memory;
@@ -80,7 +80,7 @@ void ServerNode::listen() {
 }
 
 void ServerNode::handleTCPConnection(int sock) {
-    std::vector<char> data = this->connection->receiveFile(sock);
+    std::vector<my_byte> data = this->connection->receiveFile(sock);
     // save file
 }
 
@@ -91,10 +91,10 @@ void ServerNode::handleUDPConnection(int sock) {
 
     if (response->getCmd() == "MY_LIST") {
         response->setData(getFiles(message->getData()));
+        // TODO when list greater than max UDP packet size
     } else if (response->getCmd() == "GOOD_DAY") {
         response->completeMessage(memory,
-                                         std::vector<char>(connection->getMcast().begin(),
-                                                           connection->getMcast().end()));
+                                  std::vector<my_byte>(connection->getMcast().begin(), connection->getMcast().end()));
     } else if (response->isOpeningTCP()) {
         int tcp = connection->openTCPSocket();
         fds.push_back({tcp, POLLIN, 0});
@@ -111,9 +111,9 @@ void ServerNode::closeConnections() {
     }
 }
 
-std::vector<char> ServerNode::getFiles(const std::vector<char> &s) {
+std::vector<my_byte> ServerNode::getFiles(const std::vector<my_byte> &s) {
     std::string searched(s.begin(), s.end());
-    std::vector<char> data{};
+    std::vector<my_byte> data{};
     for (auto f : files) {
         /* if the filename contains given substring */
         if (s.empty() || f.find(searched) != std::string::npos) {

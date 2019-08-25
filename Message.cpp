@@ -2,7 +2,7 @@
 
 #include "Message.h"
 
-std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, uint64_t seq, size_t size) {
+std::shared_ptr<Message> MessageBuilder::build(const std::vector<my_byte> &data, uint64_t seq, size_t size) {
     if (data.size() < Netstore::MIN_SMPL_CMD_SIZE) {
         throw InvalidMessageException();
     }
@@ -30,13 +30,13 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<char> &data, ui
     }
 
     /* set data */
-    message->setData(std::vector<char>(data.begin() + message->getDataStart(), data.begin() + size));
-    std::cerr << "Message data size : " << message->getData().size();
+    message->setData(std::vector<my_byte>(data.begin() + message->getDataStart(), data.begin() + size));
+    std::cerr << "Message data size : " << message->getData().size() << "\n";
 
     return message;
 }
 
-std::string MessageBuilder::parseCmd(const std::vector<char> &data) {
+std::string MessageBuilder::parseCmd(const std::vector<my_byte> &data) {
     /* get alpha chars from first 10 chars of data */
     std::string cmd;
     for (auto ite = data.begin(); ite < data.begin() + 10; ++ite) {
@@ -61,17 +61,18 @@ std::shared_ptr<Message> Message::getResponse() {
     return message;
 }
 
-void Message::completeMessage(int par, std::vector<char> dat) {
+void Message::completeMessage(int par, std::vector<my_byte> dat) {
     this->setParam(par);
     this->setData(std::move(dat));
 }
 
-char *Message::getRawData() {
+my_byte * Message::getRawData() {
     /* calculate size of message */
     size_t len = isComplex ? Netstore::MIN_CMPLX_CMD_SIZE : Netstore::MIN_SMPL_CMD_SIZE;
-    len += data.size();
+    size_t data_len = 0;
+    for (; data_len < data.size() && data[data_len] != '\0'; ++data_len) {}
 
-    char *rawData = (char *) malloc(len);
+    auto *rawData = (my_byte *) malloc(len + data_len);
     /* save the command */
     for (size_t i = 0; i < 10; ++i) {
         rawData[i] = i < cmd.size() ? cmd.at(i) : 0;
@@ -85,7 +86,7 @@ char *Message::getRawData() {
         memcpy(rawData + 10 + sizeof(cmd_seq), &paramn, sizeof(param));
     }
     /* save data */
-    memcpy(rawData + getDataStart(), data.data(), data.size());
+    memcpy(rawData + getDataStart(), data.data(), data_len);
     return rawData;
 }
 

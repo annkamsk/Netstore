@@ -10,7 +10,7 @@ class Message {
     std::string cmd;
     uint64_t cmd_seq{}; // big endian
     uint64_t param{}; // big endian
-    std::vector<char> data;
+    std::vector<my_byte> data;
     bool isComplex;
 
     static uint64_t getSeq() {
@@ -27,17 +27,19 @@ public:
 
     bool isOpeningTCP() const { return cmd == "CAN_ADD" || cmd == "CONNECT_ME"; }
 
-    /* returns position of first byte of data part of a message */
+    /* returns position of first my_byte of data part of a message */
     uint32_t getDataStart() const { return isComplex ? 26 : 18; }
 
     std::shared_ptr<Message> getResponse();
 
-    void completeMessage(int par, std::vector<char> dat);
+    void completeMessage(int par, std::vector<my_byte> dat);
 
-    char *getRawData();
+    my_byte * getRawData();
 
     size_t getSize() {
-        return (isComplex ? Netstore::MIN_CMPLX_CMD_SIZE : Netstore::MIN_SMPL_CMD_SIZE) + data.size();
+        size_t len = 0;
+        for (; len < data.size() && data.at(len) != '\0'; ++len) {}
+        return (isComplex ? Netstore::MIN_CMPLX_CMD_SIZE : Netstore::MIN_SMPL_CMD_SIZE) + len;
     }
 
     /* setters, getters */
@@ -46,11 +48,11 @@ public:
         this->cmd_seq = seq;
     }
 
-    void setData(std::vector<char> dat) {
+    void setData(std::vector<my_byte> dat) {
         this->data = std::move(dat);
     }
 
-    const std::vector<char> &getData() const {
+    const std::vector<my_byte> &getData() const {
         return data;
     }
 
@@ -89,7 +91,7 @@ public:
 
     static std::shared_ptr<Message> create(std::string cmd);
 
-    static std::shared_ptr<Message> build(const std::vector<char> &data, uint64_t seq, size_t size);
+    static std::shared_ptr<Message> build(const std::vector<my_byte> &data, uint64_t seq, size_t size);
 
     static bool isComplex(std::string cmd) {
         return std::any_of(complexMessages.begin(), complexMessages.end(), [&cmd](std::string s) { return s == cmd;});
@@ -100,7 +102,7 @@ public:
     }
 
 private:
-    static std::string parseCmd(const std::vector<char> &data);
+    static std::string parseCmd(const std::vector<my_byte> &data);
 };
 
 #endif //SIK2_MESSAGE_H
