@@ -41,9 +41,7 @@ void ClientNode::discover() {
 
     // TODO wait for TTL for responses
     auto response = this->connection->readFromUDPSocket(this->sock);
-    for (size_t i = 0; i < response.getSize(); ++i) {
-        std::cerr << "[" << (int) response.getBuffer().at(i) << "]" << std::flush;
-    }
+
     try {
         auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
         std::cout << "Found " << inet_ntoa(response.getCliaddr().sin_addr) << " (" << responseMessage->getData().data()
@@ -64,7 +62,7 @@ void ClientNode::search(const std::string &s) {
     // TODO wait TTL for response
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), 0);
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
 
         /* get filenames from data */
         std::vector<std::string> filenames;
@@ -104,10 +102,6 @@ void ClientNode::fetch(const std::string &s) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
                   << ")" << " Reason: " << e.what();
     }
-}
-
-void ClientNode::fetchFile(const Message &message) {
-
 }
 
 void ClientNode::upload(const std::string &s) {

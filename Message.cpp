@@ -9,7 +9,6 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<my_byte> &data,
 
     /* set cmd */
     std::string cmd = MessageBuilder::parseCmd(data);
-
     std::shared_ptr<Message> message = create(cmd);
 
     /* set seq*/
@@ -31,7 +30,7 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<my_byte> &data,
 
     /* set data */
     message->setData(std::vector<my_byte>(data.begin() + message->getDataStart(), data.begin() + size));
-    std::cerr << "Message data size : " << message->getData().size() << "\n";
+    std::cerr << "\nMessage data size : " << message->getData().size() << "\n";
 
     return message;
 }

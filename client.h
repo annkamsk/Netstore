@@ -27,12 +27,12 @@ private:
 
     static const int N = 20;
     std::map<std::string, std::function<void(std::string)>> commands = {
-            {"discover", [=](const std::string &s) { this->discover(); }},
+            {"discover", [=](const std::string &s) { (void)s; this->discover(); }},
             {"search",   [=](const std::string &s) { this->search(s); }},
             {"fetch",    [=](const std::string &s) { this->fetch(s); }}, // non-blocking
             {"upload",   [=](const std::string &s) { this->upload(s); }}, // non-blocking
             {"remove",   [=](const std::string &s) { this->remove(s); }},
-            {"exit",     [=](const std::string &s) { this->exit(); }}
+            {"exit",     [=](const std::string &s) { (void)s; this->exit(); }}
     };
     std::shared_ptr<Connection> connection;
     int sock{};
@@ -47,8 +47,6 @@ public:
             folder(std::move(folder)) {}
 
     void addFile(const std::string &filename, sockaddr_in addr);
-
-    void fetchFile(const Message &message);
 
     void readUserInput();
 

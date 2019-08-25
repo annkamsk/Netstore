@@ -32,10 +32,10 @@ void Connection::addToMulticast(int sock) {
     }
 
     /* block multicast to yourself */
-//    optval = 0;
-//    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void *) &optval, sizeof optval) < 0) {
-//        syserr("setsockopt loop");
-//    }
+    optval = 0;
+    if (setsockopt(sock, SOL_IP, IP_MULTICAST_LOOP, (void *) &optval, sizeof optval) < 0) {
+        syserr("setsockopt loop");
+    }
 }
 
 int Connection::openTCPSocket() {
@@ -82,12 +82,13 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     ConnectionResponse response{};
     std::vector<my_byte> buffer(Netstore::MAX_UDP_PACKET_SIZE, 0);
     socklen_t len = sizeof(response.getCliaddr());
-    ssize_t singleLen = recvfrom(sock, &buffer[0], Netstore::MAX_UDP_PACKET_SIZE, 0,
+
+    ssize_t singleLen = recvfrom(sock, buffer.data(), Netstore::MAX_UDP_PACKET_SIZE, 0,
                                  (struct sockaddr *) &response.getCliaddr(), &len);
     if (singleLen < 0) {
         syserr("read");
     } else {
-        std::cerr << "\nread " << singleLen << " bytes: " << (unsigned char *) buffer.data() << " from: "
+        std::cerr << "\nread " << singleLen << " bytes: " << buffer.data() << " from: "
                   << inet_ntoa(response.getCliaddr().sin_addr) << std::flush;
     }
     response.setBuffer(buffer);
@@ -114,13 +115,14 @@ std::vector<my_byte> Connection::receiveFile(int sock) {
 void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::shared_ptr<Message> &message) {
     auto messageRaw = message->getRawData();
     size_t len = message->getSize();
-    socklen_t socklen = sizeof(address);
-    ssize_t snd_len = sendto(sock, messageRaw, len, 0, (struct sockaddr *) &address, socklen);
+    ssize_t snd_len = sendto(sock, messageRaw, len, 0, (struct sockaddr *) &address, sizeof(address));
     if (snd_len != len) {
         throw PartialSendException();
     }
-    std::cerr << "\nSent " << snd_len << " my_bytes of data to " << inet_ntoa(address.sin_addr) << ": " << messageRaw
-              << "\n" << std::flush;
+    std::cerr << "\nSent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << ": ";
+    for (size_t i = 0; i < snd_len; ++i) {
+        fprintf(stderr, "[%c]", messageRaw[i]);
+    }
     free(messageRaw);
 }
 
