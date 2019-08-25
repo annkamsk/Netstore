@@ -144,10 +144,10 @@ void ClientNode::remove(const std::string &s) {
     if (s.empty()) {
         throw InvalidInputException();
     }
-    auto message = MessageBuilder::create("DELETE");
+    auto message = MessageBuilder::create("DEL");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
-    std::cout << "Request to remove file " + s + " sent.\n";
+//    std::cerr << "Request to remove file " + s + " sent.\n";
 }
 
 void ClientNode::exit() {

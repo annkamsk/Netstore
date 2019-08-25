@@ -40,20 +40,21 @@ void ServerNode::handleUDPConnection(int sock) {
     auto message = MessageBuilder::build(request.getBuffer(), 0, request.getSize());
     auto response = message->getResponse();
 
-    if (response->getCmd() == "MY_LIST") {
-        response->setData(getFiles(message->getData()));
-        // TODO when list greater than max UDP packet size
-    } else if (response->getCmd() == "GOOD_DAY") {
-        response->completeMessage(memory,
-                                  std::vector<my_byte>(connection->getMcast().begin(), connection->getMcast().end()));
+    if (message->getCmd() == "LIST") {
+        sendList(sock, request, message);
+    } else if (message->getCmd() == "HELLO") {
+        sendGreeting(sock, request, message);
     } else if (response->isOpeningTCP()) {
         int tcp = connection->openTCPSocket();
         fds.push_back({tcp, POLLIN, 0});
         timeout.insert({tcp, clock()});
         // save file name with socket
         response->completeMessage(Connection::getPort(tcp), message->getData());
+    } else if (message->getCmd() == "DEL") {
+        deleteFiles(message->getData());
+    } else {
+        connection->sendToSocket(sock, request.getCliaddr(), response);
     }
-    connection->sendToSocket(sock, request.getCliaddr(), response);
 }
 
 void ServerNode::closeConnections() {
@@ -76,3 +77,38 @@ std::vector<my_byte> ServerNode::getFiles(const std::vector<my_byte> &s) {
 }
 
 
+void ServerNode::sendList(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message) {
+    auto response = message->getResponse();
+    auto foundFiles = getFiles(message->getData());
+    if (!foundFiles.empty()) {
+        response->setData(getFiles(message->getData()));
+        // TODO when list greater than max UDP packet size
+        connection->sendToSocket(sock, request.getCliaddr(), response);
+    }
+}
+
+void ServerNode::sendGreeting(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message) {
+    auto response = message->getResponse();
+    response->completeMessage(memory,
+                              std::vector<my_byte>(connection->getMcast().begin(), connection->getMcast().end()));
+    connection->sendToSocket(sock, request.getCliaddr(), response);
+}
+
+void ServerNode::deleteFiles(const std::vector<my_byte>& data) {
+    size_t len = files.size();
+    std::string name(data.begin(), data.end());
+
+    /* remove file with the specified name */
+    files.erase(std::remove(files.begin(), files.end(), name), files.end());
+
+    /* if there were files with this name, delete them from disc */
+    if (len != files.size()) {
+        std::string path = folder + "/" + name;
+        if (remove(path.data()) != 0) {
+            std::cerr << "Error deleting file: No such file or directory\n";
+        } else {
+            std::cerr << "File " << name << " deleted.\n";
+
+        }
+    }
+}

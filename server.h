@@ -39,6 +39,12 @@ public:
 
     std::vector<my_byte> getFiles(const std::vector<my_byte> &s);
 
+    void sendList(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+
+    void sendGreeting(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+
+    void deleteFiles(const std::vector<my_byte>& data);
+
     unsigned long long getMemory() {
         return memory;
     }
