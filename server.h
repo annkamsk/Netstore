@@ -12,6 +12,7 @@ private:
     std::shared_ptr<Connection> connection;
     std::vector<pollfd> fds;
     std::unordered_map<int, clock_t> timeout;
+    std::unordered_map<int, std::string> fileToSend;
     uint64_t memory{};
 public:
 
@@ -43,7 +44,15 @@ public:
 
     void sendGreeting(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
 
+    void prepareDownload(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+
+    void prepareUpload(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+
     void deleteFiles(const std::vector<my_byte>& data);
+
+    int openToClient(const std::string& filename);
+
+    bool isUploadValid(const std::string&, uint64_t size);
 
     unsigned long long getMemory() {
         return memory;
