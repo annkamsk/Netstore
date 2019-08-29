@@ -5,14 +5,20 @@
 
 class ServerNode {
 
+    struct ClientRequest {
+        clock_t timeout;
+        std::string filename;
+        bool isToSend;
+        bool isActive;
+    };
+
     const static int N = 256;
 private:
     std::vector<std::string> files;
     std::string folder;
     std::shared_ptr<Connection> connection;
     std::vector<pollfd> fds;
-    std::unordered_map<int, clock_t> timeout;
-    std::unordered_map<int, std::string> fileToSend;
+    std::unordered_map<int, ClientRequest> clientRequests;
     uint64_t memory{};
 public:
 
@@ -50,7 +56,7 @@ public:
 
     void deleteFiles(const std::vector<my_byte>& data);
 
-    int openToClient(const std::string& filename);
+    int openToClient(const std::string &filename, bool isToSend);
 
     bool isUploadValid(const std::string&, uint64_t size);
 

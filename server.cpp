@@ -24,8 +24,9 @@ void ServerNode::listen() {
             this->handleTCPConnection(fds[k].fd);
             /* jeżeli read przekaże 0, usuń pozycję k z fds */
 
-        } else if (timeout.find(fds[k].fd) != timeout.end()) {
-            if (float(clock() - timeout.at(fds[k].fd)) / CLOCKS_PER_SEC > 10) {
+        } else if (clientRequests.find(fds[k].fd) != clientRequests.end()) {
+            clock_t timeout = clientRequests.at(fds[k].fd).timeout;
+            if (float(clock() - timeout) / CLOCKS_PER_SEC > 10) {
                 this->connection->closeSocket(fds[k].fd);
             }
         }
@@ -33,8 +34,13 @@ void ServerNode::listen() {
 }
 
 void ServerNode::handleTCPConnection(int sock) {
-    std::vector<my_byte> data = this->connection->receiveFile(sock);
-    // save file
+    auto clientRequest = clientRequests.at(sock);
+    std::string path = folder + "/" + clientRequest.filename;
+    if (clientRequest.isToSend) {
+        connection->sendFile(sock, path);
+    } else {
+        this->connection->receiveFile(sock, path);
+    }
 }
 
 void ServerNode::handleUDPConnection(int sock) {
@@ -89,7 +95,7 @@ void ServerNode::prepareDownload(int sock, const ConnectionResponse &request, co
     std::string filename(message->getData().begin(), message->getData().end());
 
     if (std::find(files.begin(), files.end(), filename) != files.end()) {
-        int tcp = openToClient(filename);
+        int tcp = openToClient(filename, true);
 
         /* send response to client */
         auto response = message->getResponse();
@@ -106,7 +112,7 @@ void ServerNode::prepareUpload(int sock, const ConnectionResponse &request, cons
 
     if (isUploadValid(filename, message->getParam())) {
         auto response = MessageBuilder::create("CAN_ADD");
-        int tcp = openToClient(filename);
+        int tcp = openToClient(filename, false);
         message->completeMessage(Connection::getPort(tcp), message->getData());
         connection->sendToSocket(sock, request.getCliaddr(), response);
     } else {
@@ -116,7 +122,7 @@ void ServerNode::prepareUpload(int sock, const ConnectionResponse &request, cons
     }
 }
 
-int ServerNode::openToClient(const std::string &filename) {
+int ServerNode::openToClient(const std::string &filename, bool isToSend) {
     int tcp = connection->openTCPSocket();
 
     /* find a place for file descriptor */
@@ -127,8 +133,8 @@ int ServerNode::openToClient(const std::string &filename) {
     } else {
         fds.insert(fds.begin() + k, {tcp, POLLIN, 0});
     }
-    timeout.insert({tcp, clock()});
-    fileToSend.insert({tcp, filename});
+    ClientRequest clientRequest({clock(), filename, isToSend, false});
+    clientRequests.insert({tcp, clientRequest});
     return tcp;
 }
 
@@ -159,6 +165,10 @@ bool ServerNode::isUploadValid(const std::string& filename, uint64_t size) {
 
 void ServerNode::closeConnections() {
     for (auto fd : fds) {
-        connection->closeSocket(fd.fd);
+        if (fd.fd != -1) {
+            connection->closeSocket(fd.fd);
+            clientRequests.erase(fd.fd);
+            fd.fd = -1;
+        }
     }
 }

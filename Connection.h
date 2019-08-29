@@ -71,7 +71,9 @@ public:
 
     static void closeSocket(int sock);
 
-    static std::vector<my_byte> receiveFile(int sock);
+    static void receiveFile(int sock, std::string &path);
+
+    void sendFile(int sock, const std::string& path);
 
     void multicast(int sock, const std::shared_ptr<Message>& message);
 

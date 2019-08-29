@@ -1,3 +1,4 @@
+
 #include "Connection.h"
 
 int Connection::openUDPSocket() {
@@ -96,31 +97,65 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     return response;
 }
 
-std::vector<my_byte> Connection::receiveFile(int sock) {
-    std::vector<my_byte> data;
+void Connection::receiveFile(int sock, std::string &path) {
+    /* opening the file */
+    FILE *file;
+    if ((file = fopen(path.data(), "wb")) == nullptr) {
+        throw FileException("Cannot open the file: " + path);
+    }
+
     std::vector<my_byte> buffer(Netstore::BUFFER_LEN);
     ssize_t len;
     do {
-        if ((len = read(sock, &buffer[0], buffer.size())) < 0) {
+        if ((len = read(sock, buffer.data(), buffer.size())) < 0) {
             throw MessageSendException("There was problem with read, while receiving files from server.\n");
         }
         std::cout << "Read " << len << " my_bytes from socket.\n";
-        data.insert(data.end(), buffer.begin(), buffer.begin() + len);
+        fwrite(std::vector<my_byte>(buffer.begin(), buffer.begin() + len).data(), sizeof(my_byte), len, file);
         buffer.clear();
     } while (len > 0);
-    return data;
 }
 
 
+void Connection::sendFile(int sock, const std::string& path) {
+    /* opening the file */
+    FILE *file;
+    if ((file = fopen(path.data(), "rb")) == nullptr) {
+        throw FileException("Cannot open the file: " + path);
+    }
+
+    /* get the size */
+    long fileSize;
+    if (fseek(file, 0, SEEK_END) != 0 || (fileSize = ftell(file)) == -1L || fseek(file, 0, SEEK_SET) != 0) {
+        throw FileException("Problem with operating on file: " + path);
+    }
+
+    while (fileSize > 0) {
+        size_t to_send = fileSize > Netstore::MAX_UDP_PACKET_SIZE ? Netstore::MAX_UDP_PACKET_SIZE : fileSize;
+
+        /* read the data */
+        std::vector<my_byte> vec(to_send, '\0');
+        fread(vec.data(), sizeof(my_byte), to_send, file);
+
+        ssize_t read;
+        if ((read = write(sock, vec.data(), to_send)) < 0) {
+            throw PartialSendException("Sending of the file: " + path + " failed.");
+        } else {
+            std::cerr << "Sent " << read << "bytes\n";
+            fileSize -= read;
+        }
+    }
+}
+
 void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::shared_ptr<Message> &message) {
     auto messageRaw = message->getRawData();
-    size_t len = message->getSize();
+    ssize_t len = message->getSize();
     ssize_t snd_len = sendto(sock, messageRaw, len, 0, (struct sockaddr *) &address, sizeof(address));
     if (snd_len != len) {
         throw PartialSendException();
     }
     std::cerr << "\nSent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << ": ";
-    for (size_t i = 0; i < snd_len; ++i) {
+    for (ssize_t i = 0; i < snd_len; ++i) {
         fprintf(stderr, "[%c]", messageRaw[i]);
     }
     free(messageRaw);
@@ -131,4 +166,3 @@ void Connection::closeSocket(int sock) {
         syserr("close");
     }
 }
-

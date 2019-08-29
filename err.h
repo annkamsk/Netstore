@@ -22,6 +22,12 @@
 #include <iostream>
 #include <cstring>
 #include <poll.h>
+#include <experimental/filesystem>
+#include <csignal>
+#include <fstream>
+#include <iterator>
+
+namespace fs = std::experimental::filesystem;
 
 #define my_byte unsigned char
 
@@ -50,7 +56,7 @@ public:
     NetstoreException() = default;
     NetstoreException(std::string message) : message(std::move(message)) {}
     const char *what() const noexcept override {
-        return "Netstore exception.\n";
+        return "ERROR: Netstore exception.\n";
     }
 
     const char *details() const noexcept {
@@ -61,22 +67,24 @@ public:
 class InvalidMessageException : public NetstoreException {
 public:
     const char *what() const noexcept override {
-        return "Message command not recognized.\n";
+        return "ERROR: Message command not recognized.\n";
     }
 
 };
 
 class PartialSendException : public NetstoreException {
 public:
+    PartialSendException(std::string s) : NetstoreException(s) {}
+    PartialSendException() = default;
     const char *what() const noexcept override {
-        return "Message was partially sent.\n";
+        return "ERROR: Message was partially sent.\n";
     }
 };
 
 class InvalidInputException : public NetstoreException {
 public:
     const char *what() const noexcept override {
-        return "This command is invalid.\n";
+        return "ERROR: This command is invalid.\n";
     }
 
 };
@@ -84,7 +92,7 @@ public:
 class WrongSeqException : public NetstoreException {
 public:
     const char *what() const noexcept override {
-        return "Packet with wrong seq.\n";
+        return "ERROR: Packet with wrong seq.\n";
     }
 };
 
@@ -93,7 +101,16 @@ public:
     MessageSendException(std::string s) : NetstoreException(s) {}
     MessageSendException() = default;
     const char *what() const noexcept override {
-        return "Packet with wrong seq.\n";
+        return "ERROR: Packet with wrong seq.\n";
+    }
+};
+
+class FileException : public NetstoreException {
+public:
+    FileException(std::string s) : NetstoreException(s) {}
+    FileException() = default;
+    const char *what() const noexcept override {
+        return "ERROR: File exception";
     }
 };
 #endif

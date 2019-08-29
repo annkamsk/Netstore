@@ -86,10 +86,8 @@ int main(int argc, char *argv[]) {
     for (;;) {
         try {
             server->listen();
-        } catch (const InvalidMessageException& e) {
-            std::cout << e.what() << std::endl;
-        } catch (const PartialSendException& e) {
-            std::cout << e.what() << std::endl;
+        } catch (const NetstoreException& e) {
+            std::cout << e.what() << " " << e.details() << std::endl;
         }
     }
     return 0;
