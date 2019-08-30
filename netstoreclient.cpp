@@ -55,8 +55,8 @@ int main(int argc, char *argv[]) {
             std::cout <<"Write a command: \n";
             client.readUserInput();
 
-        } catch (InvalidInputException &e) {
-            std::cout << e.what();
+        } catch (NetstoreException &e) {
+            std::cout << e.what() << " " << e.details() << "\n";
         }
     }
 

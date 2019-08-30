@@ -11,6 +11,7 @@
 
 namespace fs = std::experimental::filesystem;
 
+
 class ClientNode {
 private:
     void discover();
@@ -37,9 +38,11 @@ private:
     std::shared_ptr<Connection> connection;
     int sock{};
     std::unordered_map<std::string, std::queue<sockaddr_in>> files{};
+    std::map<uint64_t , std::queue<sockaddr_in>> memory{};
 
     std::string folder;
     struct pollfd fds[N]{-1, POLLIN, 0};
+    std::unordered_map<int, std::string> clientRequests;
 
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
@@ -49,6 +52,8 @@ public:
     void addFile(const std::string &filename, sockaddr_in addr);
 
     void readUserInput();
+
+    void listen();
 
     void startConnection();
 

@@ -1,5 +1,28 @@
 #include "client.h"
 
+void ClientNode::listen() {
+    poll(&fds[0], N, -1);
+
+    /* handle event on a STDIN */
+    if (fds[0].revents & POLLIN) {
+        fds[0].revents = 0;
+        readUserInput();
+    }
+
+    for (int k = 1; k < N; ++k) {
+        if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
+            fds[k].revents = 0;
+            /* make the tcp sockets non blocking */
+            this->connection->receiveFile(fds[k].fd, clientRequests.at(fds[k].fd));
+
+        } else if (clientRequests.find(fds[k].fd) != clientRequests.end()) {
+            /* check if the socket is still open - maybe server already closed it */
+//            Call recv() with a non-zero length and the MSG_PEEK flag. Then check whether the return value is 0.
+//            Using MSG_PEEK will prevent this from consuming any of the data -- the next recv() will read it again.
+        }
+    }
+}
+
 void ClientNode::readUserInput() {
     std::string input;
     std::getline(std::cin, input);
@@ -33,7 +56,11 @@ void ClientNode::startConnection() {
         syserr("bind");
     }
     connection->setReceiver();
+
+    /* listen on user's input */
+    fds[0] = {fileno(stdin), POLLIN, 0};
 }
+
 
 void ClientNode::discover() {
     auto message = MessageBuilder::create("HELLO");
@@ -44,15 +71,21 @@ void ClientNode::discover() {
 
     try {
         auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
-        std::cout << "Found " << inet_ntoa(response.getCliaddr().sin_addr) << " (" << responseMessage->getData().data()
-                  << ") with free space " << responseMessage->getParam() << "\n";
-//    Found 10.1.1.28 (239.10.11.12) with free space 23456
+
+        /* save the server with its free space */
+        auto address = response.getCliaddr();
+        auto space = responseMessage->getParam();
+        if (this->memory.find(space) == this->memory.end()) {
+            this->memory.insert({space, std::queue<sockaddr_in>()});
+        }
+        this->memory.at(space).push(address);
+        std::cout << "Found " << inet_ntoa(address.sin_addr) << " (" << responseMessage->getData().data()
+                  << ") with free space " << space << "\n";
     } catch (std::exception &e) {
         std::cerr << "[PCKG ERROR]  Skipping invalid package from " << inet_ntoa(response.getCliaddr().sin_addr) << ":"
                   << response.getCliaddr().sin_port << ". Reason: " << e.what() << "\n";
     }
 }
-
 
 void ClientNode::search(const std::string &s) {
     auto message = MessageBuilder::create("LIST");
@@ -84,8 +117,7 @@ void ClientNode::search(const std::string &s) {
 void ClientNode::fetch(const std::string &s) {
     auto servers = this->files.find(s);
     if (servers == this->files.end() || servers->second.empty()) {
-        std::cout << "File " << s << " was not found on any server.\n";
-        return;
+        throw FileException("File not found on any server.");
     }
     auto message = MessageBuilder::create("GET");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
@@ -96,11 +128,24 @@ void ClientNode::fetch(const std::string &s) {
     servers->second.push(provider);
 
     try {
-        /* send request for file */
-//        this->connection->sendToSocket(provider, message.getRawData());
+        /* send request for file TODO from new socket */
+        this->connection->sendToSocket(sock, provider, message);
+
+        /* wait for response */
+        auto response = this->connection->readFromUDPSocket(this->sock);
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        std::string filename = std::string(responseMessage->getData().begin(), responseMessage->getData().end());
+        /* if the filename is wrong */
+        if (filename != s) {
+            throw NetstoreException("Server wants to send a wrong file.");
+        }
+        int port = responseMessage->getParam();
+        // add new tcp socket to fds
+
+
     } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
-                  << ")" << " Reason: " << e.what();
+                  << ")" << " Reason: " << e.what() << " " << e.details() << "\n";
     }
 }
 
@@ -112,32 +157,21 @@ void ClientNode::upload(const std::string &s) {
         return;
     }
 
-    /* get servers with max memory space */
-//    auto max = space.rbegin();
-//
-//    /* check if there is enough place */
-//    uint64_t size = fs::file_size(file);
-//    if (size > max->first) {
-//        std::cout << "File " << s << " too big\n";
-//        return;
-//    }
-//
-//    auto dest = max->second.front();
-//    max->second.pop();
-//
-//    try {
-//
-//        // upload - not blocking
-//        std::cout << "File " << s << " uploaded (" << inet_ntoa(dest.sin_addr) << ":" << dest.sin_port << ")\n";
-//
-//        /* index new file and server with new spare space */
-//        this->files[s].push(dest);
-//        uint64_t spaceLeft = max->first - size;
-//        this->space[spaceLeft].push(dest);
-//    } catch (std::exception &e) {
-//        std::cout << "File " << s << " uploading failed (" << inet_ntoa(dest.sin_addr) << ":" << dest.sin_port
-//                  << ") Reason: " << e.what();
-//    }
+    /* get server with max memory space */
+    auto max = this->memory.rbegin();
+
+    /* check if there is enough space */
+    uint64_t size = fs::file_size(file);
+    if (size > max->first) {
+        throw FileException("File " + s + " too big.");
+    }
+
+    auto server = max->second.front();
+    max->second.pop();
+    max->second.push(server);
+
+    // TODO create new tcp socket & send file
+
 }
 
 void ClientNode::remove(const std::string &s) {
