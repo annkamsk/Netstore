@@ -220,7 +220,51 @@ void ClientNode::upload(const std::string &s) {
     max->second.pop();
     max->second.push(server);
 
-    // TODO create new tcp socket & send file
+    auto message = MessageBuilder::create("ADD");
+    message->completeMessage(htobe64(size), std::vector<my_byte>(s.begin(), s.end()));
+
+    try {
+        /* send request for upload */
+        this->connection->sendToSocket(this->sock, server, message);
+
+        /* read a response */
+        auto response = this->connection->readFromUDPSocket(this->sock);
+        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+
+        if (responseMessage->getCmd() == "NO_WAY") {
+            throw NetstoreException("Server does not agree for uploading this file.");
+        }
+
+        std::string filename = std::string(responseMessage->getData().begin(), responseMessage->getData().end());
+        /* if the filename is wrong */
+        if (filename != s) {
+            throw NetstoreException("Server wants to send a wrong file.");
+        }
+
+        /* connect to server */
+        int port = responseMessage->getParam();
+        server.sin_port = port;
+        int tcp = connection->openTCPSocket(server);
+
+        size_t i = 0;
+        for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
+        if (i == N) {
+            fds.push_back({tcp, POLLOUT, (short) this->connection->getTtl()});
+        } else {
+            fds.insert(fds.begin() + i, {tcp, POLLOUT, (short) this->connection->getTtl()});
+        }
+        i = 0;
+        for (; i < pendingFiles.size() && pendingFiles.at(i).getIsSending(); ++i) {}
+        if (i == pendingFiles.size()) {
+            throw NetstoreException("Too many pending uploads.");
+        } else {
+            pendingFiles.at(i).init(filename, tcp);
+            pendingFiles.at(i).activate();
+        }
+    } catch (NetstoreException &e) {
+        std::cout << "File " + s + " uploading failed (" + inet_ntoa(server.sin_addr) + ":" +
+                     std::to_string(ntohl(server.sin_port)) + ") " + e.what() + e.details() + "\n";
+    }
 
 }
 
@@ -235,8 +279,13 @@ void ClientNode::remove(const std::string &s) {
 }
 
 void ClientNode::exit() {
-//    klient po otrzymaniu tego polecenia powinien zakończyć wszystkie otwarte
-//    połączenia i zwolnić pobrane zasoby z systemu oraz zakończyć pracę aplikacji.
+    for (auto fd : fds) {
+        if (fd.fd != -1) {
+            connection->closeSocket(fd.fd);
+            clientRequests.erase(fd.fd);
+            fd.fd = -1;
+        }
+    }
 }
 
 void ClientNode::addFile(const std::string &filename, sockaddr_in addr) {

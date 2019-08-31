@@ -22,13 +22,40 @@ void ServerNode::listen() {
             fds[k].revents = 0;
             /* obsłuż klienta na gnieździe fds[k].fd */
             this->handleTCPConnection(fds[k].fd);
-            /* jeżeli read przekaże 0, usuń pozycję k z fds */
-
-        } else if (clientRequests.find(fds[k].fd) != clientRequests.end()) {
-            clock_t timeout = clientRequests.at(fds[k].fd).timeout;
-            if (float(clock() - timeout) / CLOCKS_PER_SEC > 10) {
-                this->connection->closeSocket(fds[k].fd);
+        } else if (fds[k].fd != -1 && fds[k].revents & POLLOUT) {
+            for (auto f : pendingFiles) {
+                if (f.getSock() == fds[k].fd) {
+                    f.activate();
+                }
             }
+        } else if (fds[k].fd != -1) {
+            /* check whether the socket is still open */
+            int buff;
+            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
+                int sock = fds[k].fd;
+                auto request = clientRequests.at(sock);
+                fclose(request.f);
+                clientRequests.erase(sock);
+                close(fds[k].fd);
+                fds[k].fd = -1;
+            }
+        }
+    }
+    handleFileSending();
+
+}
+
+void ServerNode::handleFileSending() {
+    for (auto f : pendingFiles) {
+        int sock = f.getSock();
+        auto request = clientRequests.at(sock);
+        try {
+            int result = f.handleSending();
+            if (result == 1) {
+                clientRequests.erase(sock);
+            }
+        } catch (NetstoreException &e) {
+            std::cout << "File " + request.filename + " uploading failed. Reason: " + e.what() + " " + e.details() + "\n";
         }
     }
 }
@@ -36,11 +63,12 @@ void ServerNode::listen() {
 void ServerNode::handleTCPConnection(int sock) {
     auto clientRequest = clientRequests.at(sock);
     std::string path = folder + "/" + clientRequest.filename;
-    if (clientRequest.isToSend) {
-        connection->sendFile(sock, path);
-    } else {
-        this->connection->receiveFile(sock, nullptr);
+    if (clientRequest.f == nullptr) {
+        if ((clientRequest.f = fopen(path.data(), "a")) == nullptr) {
+            throw FileException("Unable to open file " + path);
+        }
     }
+    this->connection->receiveFile(sock, clientRequest.f);
 }
 
 void ServerNode::handleUDPConnection(int sock) {
@@ -101,6 +129,7 @@ void ServerNode::prepareDownload(int sock, const ConnectionResponse &request, co
         auto response = message->getResponse();
         message->completeMessage(Connection::getPort(tcp), message->getData());
         connection->sendToSocket(sock, request.getCliaddr(), response);
+
     } else {
         std::cerr << "[PCKG ERROR] Skipping invalid package from " << inet_ntoa(request.getCliaddr().sin_addr) << ":"
                   << request.getCliaddr().sin_port << ". Reason: requested file not found.";
@@ -125,16 +154,32 @@ void ServerNode::prepareUpload(int sock, const ConnectionResponse &request, cons
 int ServerNode::openToClient(const std::string &filename, bool isToSend) {
     int tcp = connection->openTCPSocket();
 
+    short pollDir = isToSend ? POLLOUT : POLLIN;
+    auto ttl = (short) this->connection->getTtl();
+
     /* find a place for file descriptor */
     int k = 1;
     for (; k < fds.size() && fds[k].fd != -1; ++k) {}
-    if (k == N) {
-        fds.push_back({tcp, POLLIN, 0});
+    if (k == fds.size()) {
+        fds.push_back({tcp, pollDir, ttl});
     } else {
-        fds.insert(fds.begin() + k, {tcp, POLLIN, 0});
+        fds.insert(fds.begin() + k, {tcp, pollDir, ttl});
     }
-    ClientRequest clientRequest({clock(), filename, isToSend, false});
+    ClientRequest clientRequest({clock(), filename, nullptr, isToSend, false});
     clientRequests.insert({tcp, clientRequest});
+
+    if (isToSend) {
+        k = 0;
+        for (; k < pendingFiles.size() && pendingFiles.at(k).getIsSending(); ++k) {}
+        if (k == pendingFiles.size()) {
+            FileSender sender;
+            sender.init(filename, tcp);
+            pendingFiles.push_back(sender);
+        } else {
+            pendingFiles.at(k).init(filename, tcp);
+        }
+    }
+
     return tcp;
 }
 
@@ -157,7 +202,7 @@ void ServerNode::deleteFiles(const std::vector<my_byte> &data) {
     }
 }
 
-bool ServerNode::isUploadValid(const std::string& filename, uint64_t size) {
+bool ServerNode::isUploadValid(const std::string &filename, uint64_t size) {
     /* upload is valid if there is enough memory, the filename is unique and doesn't contain a path */
     return this->memory >= size && std::find(files.begin(), files.end(), filename) == files.end() &&
            filename.find('/') == std::string::npos;

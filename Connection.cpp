@@ -65,7 +65,7 @@ int Connection::openTCPSocket() {
     if (fcntl(sock, F_SETFL, flags) != 0) {
         syserr("fcntl");
     }
-    
+
     if (listen(sock, 10) < 0) {
         syserr("listen");
     }

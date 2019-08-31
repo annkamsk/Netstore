@@ -86,6 +86,10 @@ public:
     std::string getMcast() const {
         return this->mcast;
     }
+
+    unsigned int getTtl() const {
+        return this->ttl;
+    }
 };
 
 #endif //SIK2_CONNECTION_H

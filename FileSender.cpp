@@ -1,9 +1,6 @@
 #include "FileSender.h"
 
 void FileSender::init(std::string filename, int sock) {
-    /* Force the network socket into nonblocking mode */
-//        setNonblocking(socket);
-
     /* Open the file */
     if ((fd = open(filename.data(), O_RDONLY)) == -1) {
         throw FileException("Unable to open file " + filename);
@@ -12,7 +9,6 @@ void FileSender::init(std::string filename, int sock) {
     bytesSent = 0;
     buffer.clear();
     this->sock = sock;
-    isSending = true;
 }
 
 int FileSender::handleSending() {

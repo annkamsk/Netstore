@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     for (;;) {
         try {
             std::cout <<"Write a command: \n";
-            client.readUserInput();
+            client.listen();
 
         } catch (NetstoreException &e) {
             std::cout << e.what() << " " << e.details() << "\n";

@@ -22,8 +22,16 @@ public:
 
     int handleSending();
 
-    int getSock() {
+    void activate() {
+        isSending = true;
+    }
+
+    int getSock() const {
         return sock;
+    }
+
+    bool getIsSending() const {
+        return isSending;
     }
 
 };

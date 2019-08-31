@@ -2,12 +2,14 @@
 #define SIK2_SERVER_H
 
 #include "Connection.h"
+#include "FileSender.h"
 
 class ServerNode {
 
     struct ClientRequest {
         clock_t timeout;
         std::string filename;
+        FILE *f;
         bool isToSend;
         bool isActive;
     };
@@ -19,6 +21,7 @@ private:
     std::shared_ptr<Connection> connection;
     std::vector<pollfd> fds;
     std::unordered_map<int, ClientRequest> clientRequests;
+    std::vector<FileSender> pendingFiles;
     uint64_t memory{};
 public:
 
@@ -27,7 +30,8 @@ public:
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
-            memory(memory) {};
+            memory(memory),
+            pendingFiles(std::vector<FileSender>(N, FileSender())) {};
 
     void addFile(const std::string &filename, uint64_t size) {
         this->files.push_back(filename);
@@ -67,6 +71,8 @@ public:
     const std::string &getFolder() const {
         return folder;
     }
+
+    void handleFileSending();
 };
 
 #endif //SIK2_SERVER_H
