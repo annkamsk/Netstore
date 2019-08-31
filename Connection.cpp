@@ -55,6 +55,17 @@ int Connection::openTCPSocket() {
     if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
         syserr("bind");
     }
+
+    /* set to non-blocking */
+    int flags;
+    if ((flags = fcntl(sock, F_GETFL, 0)) == -1) {
+        syserr("fcntl");
+    }
+    flags = flags & ~O_NONBLOCK;
+    if (fcntl(sock, F_SETFL, flags) != 0) {
+        syserr("fcntl");
+    }
+    
     if (listen(sock, 10) < 0) {
         syserr("listen");
     }
