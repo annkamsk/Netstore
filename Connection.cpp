@@ -1,4 +1,6 @@
 
+#include <bits/fcntl-linux.h>
+#include <fcntl.h>
 #include "Connection.h"
 
 int Connection::openUDPSocket() {
@@ -47,13 +49,7 @@ int Connection::openTCPSocket() {
 
     /* bind */
     struct sockaddr_in local_address{};
-    local_address.sin_family = AF_INET;    const sockaddr_in &getRemoteAddress() const {
-        return remote_address;
-    }
-
-    void setRemoteAddress(const sockaddr_in &remoteAddress) {
-        remote_address = remoteAddress;
-    }
+    local_address.sin_family = AF_INET;
     local_address.sin_addr.s_addr = htonl(INADDR_ANY);
     local_address.sin_port = htons(0);
     if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
@@ -77,6 +73,16 @@ int Connection::openTCPSocket(struct sockaddr_in provider) {
     local_address.sin_port = htons(0);
     if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
         syserr("bind");
+    }
+
+    /* set to non-blocking */
+    int flags;
+    if ((flags = fcntl(sock, F_GETFL, 0)) == -1) {
+        syserr("fcntl");
+    }
+    flags = flags & ~O_NONBLOCK;
+    if (fcntl(sock, F_SETFL, flags) != 0) {
+        syserr("fcntl");
     }
 
     if (connect(sock, (struct sockaddr *) &provider, sizeof(provider)) < 0) {

@@ -1,5 +1,5 @@
-SRCS_SERVER = err.cpp server.cpp Message.cpp Connection.cpp netstoreserver.cpp
-SRCS_CLIENT = err.cpp client.cpp Connection.cpp Message.cpp netstoreclient.cpp
+SRCS_SERVER = err.cpp server.cpp Message.cpp Connection.cpp FileSender.cpp netstoreserver.cpp
+SRCS_CLIENT = err.cpp client.cpp Connection.cpp Message.cpp FileSender.cpp netstoreclient.cpp
 
 DEPDIR := .d
 $(shell mkdir -p $(DEPDIR) >/dev/null)
@@ -23,10 +23,10 @@ $(DEPDIR)/%.d: ;
 include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS_SERVER))))
 include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS_CLIENT))))
 
-server : err.o server.o Message.o Connection.o netstoreserver.o
+server : err.o server.o Message.o Connection.o FileSender.o netstoreserver.o
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
-client : err.o client.o Message.o Connection.o netstoreclient.o
+client : err.o client.o Message.o Connection.o FileSender.o netstoreclient.o
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
 clean:
