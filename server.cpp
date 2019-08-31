@@ -17,7 +17,7 @@ void ServerNode::listen() {
         this->handleUDPConnection(fds[0].fd);
     }
 
-    for (int k = 1; k < N; ++k) {
+    for (int k = 1; k < fds.size(); ++k) {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
             /* obsłuż klienta na gnieździe fds[k].fd */
@@ -39,7 +39,7 @@ void ServerNode::handleTCPConnection(int sock) {
     if (clientRequest.isToSend) {
         connection->sendFile(sock, path);
     } else {
-        this->connection->receiveFile(sock, path);
+        this->connection->receiveFile(sock, nullptr);
     }
 }
 
@@ -127,7 +127,7 @@ int ServerNode::openToClient(const std::string &filename, bool isToSend) {
 
     /* find a place for file descriptor */
     int k = 1;
-    for (; k < N && fds[k].fd != -1; ++k) {}
+    for (; k < fds.size() && fds[k].fd != -1; ++k) {}
     if (k == N) {
         fds.push_back({tcp, POLLIN, 0});
     } else {

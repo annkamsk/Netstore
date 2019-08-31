@@ -8,11 +8,19 @@
 #include <queue>
 
 #include "Connection.h"
+#include "FileSender.h"
 
 namespace fs = std::experimental::filesystem;
 
 
 class ClientNode {
+
+    struct ClientRequest {
+        bool isDownloadActive;
+        std::string filename;
+        sockaddr_in server;
+        FILE *f;
+    };
 private:
     void discover();
 
@@ -35,19 +43,22 @@ private:
             {"remove",   [=](const std::string &s) { this->remove(s); }},
             {"exit",     [=](const std::string &s) { (void)s; this->exit(); }}
     };
+    std::string folder;
     std::shared_ptr<Connection> connection;
     int sock{};
+    std::vector<pollfd> fds;
+    std::vector<FileSender> pendingFiles;
+
     std::unordered_map<std::string, std::queue<sockaddr_in>> files{};
     std::map<uint64_t , std::queue<sockaddr_in>> memory{};
-
-    std::string folder;
-    struct pollfd fds[N]{-1, POLLIN, 0};
-    std::unordered_map<int, std::string> clientRequests;
+    std::unordered_map<int, ClientRequest> clientRequests;
 
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
             connection(std::make_shared<Connection>(mcast, port, timeout)),
-            folder(std::move(folder)) {}
+            folder(std::move(folder)),
+            fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
+            pendingFiles(std::vector<FileSender>(N, FileSender())){}
 
     void addFile(const std::string &filename, sockaddr_in addr);
 
@@ -57,5 +68,10 @@ public:
 
     void startConnection();
 
+    void handleFileReceiving(int sock);
+
+    void handleFileDownloaded(int fd);
+
+    void handleFileSending();
 };
 #endif //SIK2_CLIENT_H

@@ -47,7 +47,13 @@ int Connection::openTCPSocket() {
 
     /* bind */
     struct sockaddr_in local_address{};
-    local_address.sin_family = AF_INET;
+    local_address.sin_family = AF_INET;    const sockaddr_in &getRemoteAddress() const {
+        return remote_address;
+    }
+
+    void setRemoteAddress(const sockaddr_in &remoteAddress) {
+        remote_address = remoteAddress;
+    }
     local_address.sin_addr.s_addr = htonl(INADDR_ANY);
     local_address.sin_port = htons(0);
     if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
@@ -55,6 +61,26 @@ int Connection::openTCPSocket() {
     }
     if (listen(sock, 10) < 0) {
         syserr("listen");
+    }
+    return sock;
+}
+
+int Connection::openTCPSocket(struct sockaddr_in provider) {
+    int sock;
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        syserr("socket");
+    }
+    /* bind */
+    struct sockaddr_in local_address{};
+    local_address.sin_family = AF_INET;
+    local_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    local_address.sin_port = htons(0);
+    if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
+        syserr("bind");
+    }
+
+    if (connect(sock, (struct sockaddr *) &provider, sizeof(provider)) < 0) {
+        throw NetstoreException("Cannot connect to the server's socket.");
     }
     return sock;
 }
@@ -97,13 +123,8 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     return response;
 }
 
-void Connection::receiveFile(int sock, std::string &path) {
-    /* opening the file */
-    FILE *file;
-    if ((file = fopen(path.data(), "wb")) == nullptr) {
-        throw FileException("Cannot open the file: " + path);
-    }
 
+void Connection::receiveFile(int sock, FILE *file) {
     std::vector<my_byte> buffer(Netstore::BUFFER_LEN);
     ssize_t len;
     do {
@@ -115,7 +136,6 @@ void Connection::receiveFile(int sock, std::string &path) {
         buffer.clear();
     } while (len > 0);
 }
-
 
 void Connection::sendFile(int sock, const std::string& path) {
     /* opening the file */

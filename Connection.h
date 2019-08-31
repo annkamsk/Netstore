@@ -46,7 +46,7 @@ protected:
     unsigned int ttl{};
 
     struct ip_mreq ip_mreq{}; // for server for listening to group
-    struct sockaddr_in remote_address{};
+    struct sockaddr_in remote_address{}; // for client for senging to group
 
 public:
     Connection() = default;
@@ -57,6 +57,8 @@ public:
     int openUDPSocket();
 
     int openTCPSocket();
+
+    int openTCPSocket(struct sockaddr_in provider);
 
     static ConnectionResponse readFromUDPSocket(int sock);
 
@@ -71,7 +73,7 @@ public:
 
     static void closeSocket(int sock);
 
-    static void receiveFile(int sock, std::string &path);
+    static void receiveFile(int sock, FILE *file);
 
     void sendFile(int sock, const std::string& path);
 
@@ -81,24 +83,8 @@ public:
 
     void setReceiver();
 
-    unsigned getTTL() {
-        return this->ttl;
-    }
-
     std::string getMcast() const {
         return this->mcast;
-    }
-
-    uint16_t getPort() const {
-        return port;
-    }
-
-    const sockaddr_in &getRemoteAddress() const {
-        return remote_address;
-    }
-
-    void setRemoteAddress(const sockaddr_in &remoteAddress) {
-        remote_address = remoteAddress;
     }
 };
 

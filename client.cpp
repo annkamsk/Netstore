@@ -9,16 +9,57 @@ void ClientNode::listen() {
         readUserInput();
     }
 
-    for (int k = 1; k < N; ++k) {
+    for (int k = 1; k < fds.size(); ++k) {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
-            /* make the tcp sockets non blocking */
-            this->connection->receiveFile(fds[k].fd, clientRequests.at(fds[k].fd));
+            handleFileReceiving(fds[k].fd);
+        } else if (fds[k].fd != -1) {
+            /* check whether the socket is still open */
+            int buff;
+            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
+                handleFileDownloaded(fds[k].fd);
+                fds[k].fd = -1;
+            }
+        }
+    }
+    handleFileSending();
+}
 
-        } else if (clientRequests.find(fds[k].fd) != clientRequests.end()) {
-            /* check if the socket is still open - maybe server already closed it */
-//            Call recv() with a non-zero length and the MSG_PEEK flag. Then check whether the return value is 0.
-//            Using MSG_PEEK will prevent this from consuming any of the data -- the next recv() will read it again.
+void ClientNode::handleFileReceiving(int fd) {
+    /* make the tcp sockets non blocking */
+    auto request = this->clientRequests.at(fd);
+    if (!request.isDownloadActive) {
+        if ((request.f = fopen(request.filename.data(), "rb")) == nullptr) {
+            throw FileException("Cannot open file " + request.filename + " for downloading data.");
+        }
+        request.isDownloadActive = true;
+    }
+    this->connection->receiveFile(fd, request.f);
+}
+
+void ClientNode::handleFileDownloaded(int fd) {
+    auto request = clientRequests.at(fd);
+    std::cout << "File " << request.filename << " downloaded" << " (" << inet_ntoa(request.server.sin_addr) << ":"
+              << ntohl(request.server.sin_port) << ")\n";
+    if (fclose(request.f) < 0) {
+        throw FileException("Unable to close downloaded file.");
+    }
+    clientRequests.erase(fd);
+}
+
+void ClientNode::handleFileSending() {
+    for (auto f : pendingFiles) {
+        int sock = f.getSock();
+        auto request = clientRequests.at(sock);
+        try {
+            int result = f.handleSending();
+            if (result) {
+                std::cout << "File " + request.filename + " uploaded (" + inet_ntoa(request.server.sin_addr) + ":" +
+                             std::to_string(ntohl(request.server.sin_port)) + ")\n";
+            }
+        } catch (NetstoreException &e) {
+            std::cout << "File " + request.filename + " uploading failed (" + inet_ntoa(request.server.sin_addr) + ":" +
+                         std::to_string(ntohl(request.server.sin_port)) + ")" + e.what() + " " + e.details() + "\n";
         }
     }
 }
@@ -128,10 +169,10 @@ void ClientNode::fetch(const std::string &s) {
     servers->second.push(provider);
 
     try {
-        /* send request for file TODO from new socket */
+        /* send request for file */
         this->connection->sendToSocket(sock, provider, message);
 
-        /* wait for response */
+        /* read a response */
         auto response = this->connection->readFromUDPSocket(this->sock);
         auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
         std::string filename = std::string(responseMessage->getData().begin(), responseMessage->getData().end());
@@ -139,10 +180,19 @@ void ClientNode::fetch(const std::string &s) {
         if (filename != s) {
             throw NetstoreException("Server wants to send a wrong file.");
         }
+
+        /* connect to server */
         int port = responseMessage->getParam();
-        // add new tcp socket to fds
+        provider.sin_port = port;
+        int tcp = connection->openTCPSocket(provider);
 
-
+        size_t i = 0;
+        for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
+        if (i == N) {
+            fds.push_back({tcp, POLLIN, 0});
+        } else {
+            fds.insert(fds.begin() + i, {tcp, POLLIN, 0});
+        }
     } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
                   << ")" << " Reason: " << e.what() << " " << e.details() << "\n";
