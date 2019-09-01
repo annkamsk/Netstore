@@ -18,6 +18,7 @@ class ClientNode {
     struct ClientRequest {
         std::string filename;
         sockaddr_in server;
+        FILE *f;
     };
 private:
     void discover();
@@ -45,19 +46,18 @@ private:
     std::shared_ptr<Connection> connection;
     int sock{};
     std::vector<pollfd> fds;
-    std::vector<FileSender> pendingFiles;
+    std::vector<FileSender> uploadFiles;
 
     std::unordered_map<std::string, std::queue<sockaddr_in>> files{};
     std::map<uint64_t , std::queue<sockaddr_in>> memory{};
-    std::unordered_map<int, ClientRequest> clientRequests;
-    std::unordered_map<int, FILE *> requestedFiles{};
+    std::unordered_map<int, ClientRequest> downloadRequests;
 
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
-            pendingFiles(std::vector<FileSender>()) {}
+            uploadFiles(std::vector<FileSender>()) {}
 
     void addFile(const std::string &filename, sockaddr_in addr);
 
@@ -72,5 +72,7 @@ public:
     void handleFileDownloaded(int fd);
 
     void handleFileSending();
+
+    int connectWithServer(uint64_t param, sockaddr_in &addr);
 };
 #endif //SIK2_CLIENT_H

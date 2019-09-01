@@ -26,19 +26,18 @@ void ServerNode::listen() {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
             this->handleFileReceiving(fds[k].fd);
+        } else if (fds[k].fd != -1) {
+            /* check whether the socket is still open */
+            int buff;
+            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
+                int sock = fds[k].fd;
+                fclose(filesUploaded.at(sock));
+                filesUploaded.erase(sock);
+                close(sock);
+                fds[k].fd = -1;
+                // TODO clientRequests.erase(sock);
+            }
         }
-//        else if (fds[k].fd != -1) {
-//            /* check whether the socket is still open */
-//            int buff;
-//            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
-//                int sock = fds[k].fd;
-//                fclose(filesUploaded.at(sock));
-//                filesUploaded.erase(sock);
-//                close(sock);
-//                fds[k].fd = -1;
-//                TODO clientRequests.erase(sock);
-//            }
-//        }
     }
     handleFileSending();
 }
@@ -46,7 +45,13 @@ void ServerNode::listen() {
 void ServerNode::handleFileReceiving(int sock) {
     if (filesUploaded.find(sock) != filesUploaded.end()) {
         auto file = filesUploaded.at(sock);
-        this->connection->receiveFile(sock, file);
+        if (this->connection->receiveFile(sock, file)) {
+            std::cout << "File downloaded.\n";
+            if (fclose(file) < 0) {
+                throw FileException("Unable to close downloaded file.");
+            }
+            filesUploaded.erase(sock);
+        }
     }
 }
 
@@ -56,19 +61,17 @@ void ServerNode::handleFileSending() {
         auto f = *it;
         auto clientId = Netstore::getKey(f.getClientAddr());
         auto request = clientRequests.at(clientId);
-        int result = f.handleSending();
-        switch (result) {
-            case 4:
-                std::cerr << "File " << request.filename << " uploading failed. Reason: could not open to read.";
-            case 3:
-                std::cerr << "File " << request.filename << " uploading failed. Reason:  Couldn't send message.\n";
-            case 1:
+        try {
+            if (f.handleSending()) {
                 clientRequests.erase(clientId);
                 it = pendingFiles.erase(it);
-                break;
-            case 0:
-            default:
+            } else {
                 ++it;
+            }
+        } catch (NetstoreException &e) {
+            std::cerr << "File " << request.filename << " uploading failed. Reason: " << e.what() << " " << e.details();
+            // TODO close
+            it = pendingFiles.erase(it);
         }
     }
 }
@@ -102,16 +105,15 @@ void ServerNode::handleTCPConnection(int sock) {
         /* initiate sending file */
         FileSender sender{};
         sender.init(path, newSock, clientAddr);
-        sender.activate();
         pendingFiles.push_back(sender);
     } else {
         /* initiate receiving file */
         FILE *f;
-        if ((f = fopen(path.data(), "a")) == nullptr) {
+        if ((f = fopen(path.data(), "wb")) == nullptr) {
             throw FileException("Unable to open file " + path);
         }
         filesUploaded.insert({newSock, f});
-        this->connection->receiveFile(sock, f);
+        this->connection->receiveFile(newSock, f);
     }
 }
 
@@ -186,16 +188,18 @@ void ServerNode::prepareUpload(int sock, const ConnectionResponse &request, cons
     std::string filename(message->getData().begin(), message->getData().end());
 
     if (isUploadValid(filename, message->getParam())) {
+        auto port = (uint64_t) this->connection->getTCPport();
         /* save request */
         auto clientAddr = request.getCliaddr();
         clientRequests.insert({Netstore::getKey(clientAddr), {clock(), filename, false, false}});
 
         auto response = MessageBuilder::create("CAN_ADD");
-        int port = this->connection->getTCPport();
-        message->completeMessage(port, message->getData());
+        response->setSeq(message->getCmdSeq());
+        response->completeMessage(port, std::vector<my_byte>(filename.begin(), filename.end()));
         connection->sendToSocket(sock, request.getCliaddr(), response);
     } else {
         auto response = MessageBuilder::create("NO_WAY");
+        response->setSeq(message->getCmdSeq());
         response->setData(std::vector<my_byte>(filename.begin(), filename.end()));
         connection->sendToSocket(sock, request.getCliaddr(), response);
     }
@@ -208,7 +212,7 @@ void ServerNode::deleteFiles(const std::vector<my_byte> &data) {
     /* remove file with the specified name */
     files.erase(std::remove(files.begin(), files.end(), name), files.end());
 
-    /* if there were files with this name, delete them from disc */
+    /* if there were files with this name, delete them */
     if (len != files.size()) {
         std::string path = folder + "/" + name;
         if (remove(path.data()) != 0) {

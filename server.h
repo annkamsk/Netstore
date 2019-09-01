@@ -5,7 +5,7 @@
 #include "FileSender.h"
 
 class ServerNode {
-
+    // TODO timeout
     struct ClientRequest {
         clock_t timeout;
         std::string filename;

@@ -159,7 +159,7 @@ int Connection::receiveFile(int sock, FILE *file) {
     if (len == 0) {
         return 1;
     }
-    std::cout << "Read " << len << " my_bytes from socket.\n";
+//    std::cout << "Read " << len << " my_bytes from socket.\n";
     fwrite(buffer.data(), sizeof(my_byte), len, file);
     buffer.clear();
     return 0;

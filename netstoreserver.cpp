@@ -61,7 +61,9 @@ void indexFiles(const std::shared_ptr<ServerNode>& server) {
 
     for (const auto &entry : fs::directory_iterator(folder)) {
         const fs::path& file(entry.path());
-        server->addFile(entry.path().filename(), fs::file_size(file));
+        if (!fs::is_directory(file)) {
+            server->addFile(entry.path().filename(), fs::file_size(file));
+        }
     }
 }
 

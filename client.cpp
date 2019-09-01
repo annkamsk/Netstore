@@ -7,7 +7,7 @@ void ClientNode::listen() {
     if (fds[0].revents & POLLIN) {
         fds[0].revents = 0;
         readUserInput();
-        std::cout <<"Write a command: \n";
+        std::cout << "Write a command: \n";
     }
 
     for (size_t k = 1; k < fds.size(); ++k) {
@@ -27,9 +27,8 @@ void ClientNode::listen() {
 }
 
 void ClientNode::handleFileReceiving(int fd) {
-    /* make the tcp sockets non blocking */
-    if (this->requestedFiles.find(fd) != requestedFiles.end()) {
-        auto f = this->requestedFiles.at(fd);
+    if (this->downloadRequests.find(fd) != downloadRequests.end()) {
+        auto f = this->downloadRequests.at(fd).f;
         if (this->connection->receiveFile(fd, f)) {
             handleFileDownloaded(fd);
         }
@@ -37,32 +36,32 @@ void ClientNode::handleFileReceiving(int fd) {
 }
 
 void ClientNode::handleFileDownloaded(int fd) {
-    auto request = clientRequests.at(fd);
-    auto file = requestedFiles.at(fd);
+    auto request = downloadRequests.at(fd);
     std::cout << "File " << request.filename << " downloaded" << " (" << inet_ntoa(request.server.sin_addr) << ":"
               << ntohl(request.server.sin_port) << ")\n";
-    if (fclose(file) < 0) {
+    if (fclose(request.f) < 0) {
         throw FileException("Unable to close downloaded file.");
     }
-    clientRequests.erase(fd);
-    requestedFiles.erase(fd);
+    downloadRequests.erase(fd);
 }
 
 void ClientNode::handleFileSending() {
-    for (auto f : pendingFiles) {
-        int sock = f.getSock();
-        if (sock != -1) {
-            auto request = clientRequests.at(sock);
-            try {
-                int result = f.handleSending();
-                if (result) {
-                    std::cout << "File " + request.filename + " uploaded (" + inet_ntoa(request.server.sin_addr) + ":" +
-                                 std::to_string(ntohl(request.server.sin_port)) + ")\n";
-                }
-            } catch (NetstoreException &e) {
-                std::cout << "File " + request.filename + " uploading failed (" + inet_ntoa(request.server.sin_addr) + ":" +
-                             std::to_string(ntohl(request.server.sin_port)) + ")" + e.what() + " " + e.details() + "\n";
+    auto it = uploadFiles.begin();
+    while (it != uploadFiles.end()) {
+        auto f = *it;
+        try {
+            if (f.handleSending()) {
+                std::cout << "File " + f.getFilename() + " uploaded (" + inet_ntoa(f.getClientAddr().sin_addr) + ":" +
+                             std::to_string(ntohl(f.getClientAddr().sin_port)) + ")\n";
+                it = uploadFiles.erase(it);
+            } else {
+                ++it;
             }
+        } catch (NetstoreException &e) {
+            std::cout << "File " + f.getFilename() + " uploading failed (" + inet_ntoa(f.getClientAddr().sin_addr) + ":" +
+                       std::to_string(ntohl(f.getClientAddr().sin_port)) + ")" + e.what() + " " + e.details() + "\n";
+            // TODO close
+            it = uploadFiles.erase(it);
         }
     }
 }
@@ -95,7 +94,7 @@ void ClientNode::startConnection() {
     struct sockaddr_in local_address{};
     local_address.sin_family = AF_INET;
     local_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    local_address.sin_port = htons(8887);
+    local_address.sin_port = htons(0);
     if (bind(this->sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
         syserr("bind");
     }
@@ -185,28 +184,19 @@ void ClientNode::fetch(const std::string &s) {
             throw NetstoreException("Server wants to send a wrong file.");
         }
 
-        /* connect to server */
-        uint16_t port = (uint16_t) responseMessage->getParam();
-        provider.sin_port = htons(port);
-        int tcp = connection->openTCPSocket(provider);
+        int tcp = connectWithServer(responseMessage->getParam(), provider);
 
-        size_t i = 0;
-        for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
-        if (i == N) {
-            throw NetstoreException("Too many open connections. Try again later.");
-        }
-        fds.at(i) = {tcp, POLLIN, 0};
         FILE *f;
         std::string path(folder + "/" + filename);
         if ((f = fopen(path.data(), "wb")) == nullptr) {
             throw FileException("Could not open file " + path + " for writing.");
         }
-        requestedFiles.insert({tcp, f});
-        clientRequests.insert({tcp, {path, provider}});
+        downloadRequests.insert({tcp, {path, provider, f}});
 
     } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
                   << ")" << " Reason: " << e.what() << " " << e.details() << "\n";
+        // TODO close sock
     }
 }
 
@@ -214,7 +204,7 @@ void ClientNode::upload(const std::string &s) {
     /* find file */
     fs::path file(s);
     if (!fs::exists(s) || !fs::is_regular_file(file)) {
-        std::cout << "File " + s + " does not exist\n";
+        std::cout << "ERROR: File " + s + " does not exist\n";
         return;
     }
 
@@ -241,7 +231,6 @@ void ClientNode::upload(const std::string &s) {
         /* read a response */
         auto response = this->connection->readFromUDPSocket(this->sock);
         auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
-
         if (responseMessage->getCmd() == "NO_WAY") {
             throw NetstoreException("Server does not agree for uploading this file.");
         }
@@ -249,34 +238,34 @@ void ClientNode::upload(const std::string &s) {
         std::string filename = std::string(responseMessage->getData().begin(), responseMessage->getData().end());
         /* if the filename is wrong */
         if (filename != s) {
-            throw NetstoreException("Server wants to send a wrong file.");
+            throw NetstoreException("Server wants to receive a wrong file.");
         }
 
-        /* connect to server */
-        int port = responseMessage->getParam();
-        server.sin_port = port;
-        int tcp = connection->openTCPSocket(server);
+        int tcp = connectWithServer(responseMessage->getParam(), server);
+        FileSender sender{};
+        sender.init(filename, tcp, server);
+        uploadFiles.push_back(sender);
 
-        size_t i = 0;
-        for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
-        if (i == N) {
-            throw NetstoreException("Too many open connections. Try again later.");
-        } else {
-            fds.at(i) = {tcp, POLLOUT, (short) this->connection->getTtl()};
-        }
-        i = 0;
-        for (; i < pendingFiles.size() && pendingFiles.at(i).getIsSending(); ++i) {}
-        if (i == pendingFiles.size()) {
-            throw NetstoreException("Too many pending uploads.");
-        } else {
-            pendingFiles.at(i).init(filename, tcp, response.getCliaddr());
-            pendingFiles.at(i).activate();
-        }
     } catch (NetstoreException &e) {
         std::cout << "File " + s + " uploading failed (" + inet_ntoa(server.sin_addr) + ":" +
                      std::to_string(ntohl(server.sin_port)) + ") " + e.what() + e.details() + "\n";
+        // TODO close
     }
 
+}
+
+int ClientNode::connectWithServer(uint64_t param, sockaddr_in &addr) {
+    auto port = (uint16_t) param;
+    addr.sin_port = htons(port);
+    int tcp = connection->openTCPSocket(addr);
+
+    size_t i = 0;
+    for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
+    if (i == fds.size()) {
+        throw NetstoreException("Too many open connections. Try again later.");
+    }
+    fds.at(i) = {tcp, POLLIN, 0};
+    return tcp;
 }
 
 void ClientNode::remove(const std::string &s) {
@@ -286,14 +275,13 @@ void ClientNode::remove(const std::string &s) {
     auto message = MessageBuilder::create("DEL");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
-//    std::cerr << "Request to remove file " + s + " sent.\n";
 }
 
 void ClientNode::exit() {
     for (auto fd : fds) {
         if (fd.fd != -1) {
             connection->closeSocket(fd.fd);
-            clientRequests.erase(fd.fd);
+            downloadRequests.erase(fd.fd);
             fd.fd = -1;
         }
     }

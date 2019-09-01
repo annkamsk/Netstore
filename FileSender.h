@@ -8,6 +8,7 @@ class FileSender {
     int fd;               /* file being sent */
     int sock;
     sockaddr_in clientAddr{};
+    std::string filename{};
     std::vector<my_byte> buffer;    /* current chunk of file */
     int bytesCount;          /* bytes in buffer */
     int bytesSent;         /* bytes sent so far */
@@ -21,10 +22,6 @@ public:
 
     int handleSending();
 
-    void activate() {
-        isSending = true;
-    }
-
     int getSock() const {
         return sock;
     }
@@ -35,6 +32,10 @@ public:
 
     sockaddr_in getClientAddr() const {
         return clientAddr;
+    }
+
+    std::string getFilename() const {
+        return filename;
     }
 
 };
