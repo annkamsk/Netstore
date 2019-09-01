@@ -1,6 +1,4 @@
 
-#include <bits/fcntl-linux.h>
-#include <fcntl.h>
 #include "Connection.h"
 
 int Connection::openUDPSocket() {
@@ -69,34 +67,37 @@ int Connection::openTCPSocket() {
     if (listen(sock, 10) < 0) {
         syserr("listen");
     }
+    /* save port and IP address */
+    this->TCPport = getPort(sock);
+    struct sockaddr_in addr;
+    socklen_t addr_size = sizeof(struct sockaddr_in);
+    int res = getpeername(sock, (struct sockaddr *) &addr, &addr_size);
+    strcpy(local.data(), inet_ntoa(addr.sin_addr));
     return sock;
 }
 
 int Connection::openTCPSocket(struct sockaddr_in provider) {
     int sock;
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         syserr("socket");
     }
-    /* bind */
-    struct sockaddr_in local_address{};
-    local_address.sin_family = AF_INET;
-    local_address.sin_addr.s_addr = htonl(INADDR_ANY);
-    local_address.sin_port = htons(0);
-    if (bind(sock, (struct sockaddr *) &local_address, sizeof local_address) < 0) {
-        syserr("bind");
-    }
+
+    struct sockaddr_in server{};
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = provider.sin_addr.s_addr;
+    server.sin_port = provider.sin_port;
 
     /* set to non-blocking */
-    int flags;
-    if ((flags = fcntl(sock, F_GETFL, 0)) == -1) {
-        syserr("fcntl");
-    }
-    flags = flags & ~O_NONBLOCK;
-    if (fcntl(sock, F_SETFL, flags) != 0) {
-        syserr("fcntl");
-    }
+//    int flags;
+//    if ((flags = fcntl(sock, F_GETFL, 0)) == -1) {
+//        syserr("fcntl");
+//    }
+//    flags = flags & ~O_NONBLOCK;
+//    if (fcntl(sock, F_SETFL, flags) != 0) {
+//        syserr("fcntl");
+//    }
 
-    if (connect(sock, (struct sockaddr *) &provider, sizeof(provider)) < 0) {
+    if (connect(sock, (struct sockaddr *) &server, sizeof(server)) == -1) {
         throw NetstoreException("Cannot connect to the server's socket.");
     }
     return sock;
@@ -110,6 +111,14 @@ void Connection::setReceiver() {
     if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
         syserr("inet_aton");
     }
+}
+
+void Connection::setTimeout(int sock) {
+    struct timeval tv{};
+    tv.tv_sec = ttl;
+    tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
 }
 
 void Connection::multicast(int sock, const std::shared_ptr<Message> &message) {
@@ -130,7 +139,7 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     ssize_t singleLen = recvfrom(sock, buffer.data(), Netstore::MAX_UDP_PACKET_SIZE, 0,
                                  (struct sockaddr *) &response.getCliaddr(), &len);
     if (singleLen < 0) {
-        syserr("read");
+        throw NetstoreException("Timeout while waiting for server to initiate the connection.");
     } else {
         std::cerr << "\nread " << singleLen << " bytes: " << buffer.data() << " from: "
                   << inet_ntoa(response.getCliaddr().sin_addr) << std::flush;
@@ -192,7 +201,7 @@ void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::s
         throw PartialSendException();
     }
     std::cerr << "\nSent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << ": ";
-    for (ssize_t i = 0; i < snd_len; ++i) {
+    for (size_t i = 0; i < snd_len; ++i) {
         fprintf(stderr, "[%c]", messageRaw[i]);
     }
     free(messageRaw);

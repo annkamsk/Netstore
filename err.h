@@ -26,6 +26,8 @@
 #include <csignal>
 #include <fstream>
 #include <iterator>
+#include <fcntl.h>
+
 
 namespace fs = std::experimental::filesystem;
 
@@ -39,6 +41,11 @@ namespace Netstore {
 
     const static unsigned BUFFER_LEN = 2048;
     const static unsigned MAX_UDP_PACKET_SIZE = 65507;
+
+    inline std::string getKey(sockaddr_in addr) {
+        auto ip = inet_ntoa(addr.sin_addr);
+        return std::string(ip);
+    }
 }
 
 /* wypisuje informacje o blednym zakonczeniu funkcji systemowej
@@ -56,7 +63,7 @@ public:
     NetstoreException() = default;
     NetstoreException(std::string message) : message(std::move(message)) {}
     const char *what() const noexcept override {
-        return "ERROR: Netstore exception.\n";
+        return "ERROR: Netstore exception. ";
     }
 
     const char *details() const noexcept {
@@ -67,7 +74,7 @@ public:
 class InvalidMessageException : public NetstoreException {
 public:
     const char *what() const noexcept override {
-        return "ERROR: Message command not recognized.\n";
+        return "ERROR: Message command not recognized. ";
     }
 
 };
@@ -77,14 +84,14 @@ public:
     PartialSendException(std::string s) : NetstoreException(s) {}
     PartialSendException() = default;
     const char *what() const noexcept override {
-        return "ERROR: Message was partially sent.\n";
+        return "ERROR: Message was partially sent. ";
     }
 };
 
 class InvalidInputException : public NetstoreException {
 public:
     const char *what() const noexcept override {
-        return "ERROR: This command is invalid.\n";
+        return "ERROR: This command is invalid. ";
     }
 
 };
@@ -92,7 +99,7 @@ public:
 class WrongSeqException : public NetstoreException {
 public:
     const char *what() const noexcept override {
-        return "ERROR: Packet with wrong seq.\n";
+        return "ERROR: Packet with wrong seq. ";
     }
 };
 
@@ -101,7 +108,7 @@ public:
     MessageSendException(std::string s) : NetstoreException(s) {}
     MessageSendException() = default;
     const char *what() const noexcept override {
-        return "ERROR: Packet with wrong seq.\n";
+        return "ERROR: Message sending exception. ";
     }
 };
 
@@ -110,7 +117,9 @@ public:
     FileException(std::string s) : NetstoreException(s) {}
     FileException() = default;
     const char *what() const noexcept override {
-        return "ERROR: File exception";
+        return "ERROR: File exception. ";
     }
 };
+
+
 #endif

@@ -55,8 +55,8 @@ private:
 
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
-            connection(std::make_shared<Connection>(mcast, port, timeout)),
             folder(std::move(folder)),
+            connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
             pendingFiles(std::vector<FileSender>(N, FileSender())){}
 

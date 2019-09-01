@@ -9,7 +9,6 @@ class ServerNode {
     struct ClientRequest {
         clock_t timeout;
         std::string filename;
-        FILE *f;
         bool isToSend;
         bool isActive;
     };
@@ -20,8 +19,9 @@ private:
     std::string folder;
     std::shared_ptr<Connection> connection;
     std::vector<pollfd> fds;
-    std::unordered_map<int, ClientRequest> clientRequests;
-    std::vector<FileSender> pendingFiles;
+    std::unordered_map<std::string, ClientRequest> clientRequests;
+    std::unordered_map<int, FILE *> filesUploaded;
+    std::vector<FileSender> pendingFiles{};
     uint64_t memory{};
 public:
 
@@ -30,8 +30,7 @@ public:
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
-            memory(memory),
-            pendingFiles(std::vector<FileSender>(N, FileSender())) {};
+            memory(memory) {};
 
     void addFile(const std::string &filename, uint64_t size) {
         this->files.push_back(filename);
@@ -50,19 +49,17 @@ public:
 
     std::vector<my_byte> getFiles(const std::vector<my_byte> &s);
 
-    void sendList(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+    void sendList(int sock, const ConnectionResponse &request, const std::shared_ptr<Message> &message);
 
-    void sendGreeting(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+    void sendGreeting(int sock, const ConnectionResponse &request, const std::shared_ptr<Message> &message);
 
-    void prepareDownload(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+    void prepareDownload(int sock, const ConnectionResponse &request, const std::shared_ptr<Message> &message);
 
-    void prepareUpload(int sock, const ConnectionResponse& request, const std::shared_ptr<Message>& message);
+    void prepareUpload(int sock, const ConnectionResponse &request, const std::shared_ptr<Message> &message);
 
-    void deleteFiles(const std::vector<my_byte>& data);
+    void deleteFiles(const std::vector<my_byte> &data);
 
-    int openToClient(const std::string &filename, bool isToSend);
-
-    bool isUploadValid(const std::string&, uint64_t size);
+    bool isUploadValid(const std::string &, uint64_t size);
 
     unsigned long long getMemory() {
         return memory;
@@ -73,6 +70,8 @@ public:
     }
 
     void handleFileSending();
+
+    void handleFileReceiving(int sock);
 };
 
 #endif //SIK2_SERVER_H

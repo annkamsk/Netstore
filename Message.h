@@ -23,10 +23,6 @@ class Message {
 public:
     Message(std::string cmd, bool isComplex) : cmd(std::move(cmd)), cmd_seq(getSeq()), isComplex(isComplex) {}
 
-    bool isMessageComplex() const { return isComplex; }
-
-    bool isOpeningTCP() const { return cmd == "CAN_ADD" || cmd == "CONNECT_ME"; }
-
     /* returns position of first my_byte of data part of a message */
     uint32_t getDataStart() const { return isComplex ? 26 : 18; }
 

@@ -1,11 +1,11 @@
 #include "server.h"
 
-// TODO sprawdzanie czy jakiś socket tcp się już nie przeterminował
-
 void ServerNode::createConnection() {
     int sock = connection->openUDPSocket();
     connection->addToMulticast(sock);
     fds.insert(fds.begin(), {sock, POLLIN, 0});
+    int tcpSock = connection->openTCPSocket();
+    fds.insert(fds.begin() + 1, {tcpSock, POLLIN, 0});
 }
 
 void ServerNode::listen() {
@@ -16,59 +16,99 @@ void ServerNode::listen() {
         fds[0].revents = 0;
         this->handleUDPConnection(fds[0].fd);
     }
+    /* handle event on TCP socket */
+    if (fds[1].revents & POLLIN) {
+        fds[1].revents = 0;
+        std::cerr << "Got TCP event.";
+        this->handleTCPConnection(fds[1].fd);
+    }
 
-    for (int k = 1; k < fds.size(); ++k) {
+    for (size_t k = 2; k < fds.size(); ++k) {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
-            /* obsłuż klienta na gnieździe fds[k].fd */
-            this->handleTCPConnection(fds[k].fd);
-        } else if (fds[k].fd != -1 && fds[k].revents & POLLOUT) {
-            for (auto f : pendingFiles) {
-                if (f.getSock() == fds[k].fd) {
-                    f.activate();
-                }
-            }
+            this->handleFileReceiving(fds[k].fd);
         } else if (fds[k].fd != -1) {
             /* check whether the socket is still open */
             int buff;
             if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
                 int sock = fds[k].fd;
-                auto request = clientRequests.at(sock);
-                fclose(request.f);
-                clientRequests.erase(sock);
-                close(fds[k].fd);
+                fclose(filesUploaded.at(sock));
+                filesUploaded.erase(sock);
+                close(sock);
                 fds[k].fd = -1;
+//                TODO clientRequests.erase(sock);
             }
         }
     }
     handleFileSending();
+}
 
+void ServerNode::handleFileReceiving(int sock) {
+    auto file = filesUploaded.at(sock);
+    this->connection->receiveFile(sock, file);
 }
 
 void ServerNode::handleFileSending() {
-    for (auto f : pendingFiles) {
-        int sock = f.getSock();
-        auto request = clientRequests.at(sock);
-        try {
-            int result = f.handleSending();
-            if (result == 1) {
-                clientRequests.erase(sock);
-            }
-        } catch (NetstoreException &e) {
-            std::cout << "File " + request.filename + " uploading failed. Reason: " + e.what() + " " + e.details() + "\n";
+    auto it = pendingFiles.begin();
+    while (it != pendingFiles.end()) {
+        auto f = *it;
+        auto clientId = Netstore::getKey(f.getClientAddr());
+        auto request = clientRequests.at(clientId);
+        int result = f.handleSending();
+        switch (result) {
+            case 1:
+                /* uploading finished */
+                clientRequests.erase(clientId);
+                it = pendingFiles.erase(it);
+                break;
+            case 3:
+                std::cout << "File " << request.filename << " uploading failed. Reason:  Couldn't send message.\n";
+            default:
+                ++it;
         }
     }
 }
 
 void ServerNode::handleTCPConnection(int sock) {
-    auto clientRequest = clientRequests.at(sock);
+    /* find a place for a new socket */
+    size_t k = 2;
+    for (; k < fds.size() && fds[k].fd != -1; ++k) {}
+    if (k == fds.size()) {
+        throw MessageSendException("Cannot accept the new connection now.");
+    }
+
+    /* accept the connection */
+    sockaddr_in clientAddr{};
+    socklen_t len = sizeof(clientAddr);
+    int newSock;
+    if ((newSock = accept(sock, (sockaddr *) &clientAddr, &len)) == -1) {
+        throw MessageSendException("Error while accepting client's connection.");
+    }
+    /* save new file descriptor*/
+    fds[k].fd = newSock;
+
+    /* see what client requested before */
+    std::string clientId = Netstore::getKey(clientAddr);
+    if (clientRequests.find(clientId) == clientRequests.end()) {
+        throw NetstoreException("Client " + std::string(inet_ntoa(clientAddr.sin_addr)) + " doesn't have any requests waiting.");
+    }
+    ClientRequest clientRequest = clientRequests.at(clientId);
     std::string path = folder + "/" + clientRequest.filename;
-    if (clientRequest.f == nullptr) {
-        if ((clientRequest.f = fopen(path.data(), "a")) == nullptr) {
+    if (clientRequest.isToSend) {
+        /* initiate sending file */
+        FileSender sender{};
+        sender.init(clientRequest.filename, newSock, clientAddr);
+        sender.activate();
+        pendingFiles.push_back(sender);
+    } else {
+        /* initiate receiving file */
+        FILE *f;
+        if ((f = fopen(path.data(), "a")) == nullptr) {
             throw FileException("Unable to open file " + path);
         }
+        filesUploaded.insert({newSock, f});
+        this->connection->receiveFile(sock, f);
     }
-    this->connection->receiveFile(sock, clientRequest.f);
 }
 
 void ServerNode::handleUDPConnection(int sock) {
@@ -123,16 +163,18 @@ void ServerNode::prepareDownload(int sock, const ConnectionResponse &request, co
     std::string filename(message->getData().begin(), message->getData().end());
 
     if (std::find(files.begin(), files.end(), filename) != files.end()) {
-        int tcp = openToClient(filename, true);
+        auto port = (uint64_t) this->connection->getTCPport();
+        /* save request */
+        auto clientAddr = request.getCliaddr();
+        clientRequests.insert({Netstore::getKey(clientAddr), {clock(), filename, true, false}});
 
         /* send response to client */
         auto response = message->getResponse();
-        message->completeMessage(Connection::getPort(tcp), message->getData());
+        response->completeMessage(port, std::vector<my_byte>(filename.begin(), filename.end()));
         connection->sendToSocket(sock, request.getCliaddr(), response);
-
     } else {
         std::cerr << "[PCKG ERROR] Skipping invalid package from " << inet_ntoa(request.getCliaddr().sin_addr) << ":"
-                  << request.getCliaddr().sin_port << ". Reason: requested file not found.";
+                  << ntohs(request.getCliaddr().sin_port) << ". Reason: requested file not found.";
     }
 }
 
@@ -140,47 +182,19 @@ void ServerNode::prepareUpload(int sock, const ConnectionResponse &request, cons
     std::string filename(message->getData().begin(), message->getData().end());
 
     if (isUploadValid(filename, message->getParam())) {
+        /* save request */
+        auto clientAddr = request.getCliaddr();
+        clientRequests.insert({Netstore::getKey(clientAddr), {clock(), filename, false, false}});
+
         auto response = MessageBuilder::create("CAN_ADD");
-        int tcp = openToClient(filename, false);
-        message->completeMessage(Connection::getPort(tcp), message->getData());
+        int port = this->connection->getTCPport();
+        message->completeMessage(port, message->getData());
         connection->sendToSocket(sock, request.getCliaddr(), response);
     } else {
         auto response = MessageBuilder::create("NO_WAY");
         response->setData(std::vector<my_byte>(filename.begin(), filename.end()));
         connection->sendToSocket(sock, request.getCliaddr(), response);
     }
-}
-
-int ServerNode::openToClient(const std::string &filename, bool isToSend) {
-    int tcp = connection->openTCPSocket();
-
-    short pollDir = isToSend ? POLLOUT : POLLIN;
-    auto ttl = (short) this->connection->getTtl();
-
-    /* find a place for file descriptor */
-    int k = 1;
-    for (; k < fds.size() && fds[k].fd != -1; ++k) {}
-    if (k == fds.size()) {
-        fds.push_back({tcp, pollDir, ttl});
-    } else {
-        fds.insert(fds.begin() + k, {tcp, pollDir, ttl});
-    }
-    ClientRequest clientRequest({clock(), filename, nullptr, isToSend, false});
-    clientRequests.insert({tcp, clientRequest});
-
-    if (isToSend) {
-        k = 0;
-        for (; k < pendingFiles.size() && pendingFiles.at(k).getIsSending(); ++k) {}
-        if (k == pendingFiles.size()) {
-            FileSender sender;
-            sender.init(filename, tcp);
-            pendingFiles.push_back(sender);
-        } else {
-            pendingFiles.at(k).init(filename, tcp);
-        }
-    }
-
-    return tcp;
 }
 
 void ServerNode::deleteFiles(const std::vector<my_byte> &data) {
@@ -212,8 +226,6 @@ void ServerNode::closeConnections() {
     for (auto fd : fds) {
         if (fd.fd != -1) {
             connection->closeSocket(fd.fd);
-            clientRequests.erase(fd.fd);
-            fd.fd = -1;
         }
     }
 }

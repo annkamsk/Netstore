@@ -11,6 +11,7 @@ class ConnectionResponse {
 public:
 
     ConnectionResponse() = default;
+
     const std::vector<my_byte> &getBuffer() const {
         return buffer;
     }
@@ -43,6 +44,7 @@ protected:
     std::string mcast{};
     std::string local;
     uint16_t port{};
+    uint16_t TCPport{};
     unsigned int ttl{};
 
     struct ip_mreq ip_mreq{}; // for server for listening to group
@@ -52,8 +54,10 @@ public:
     Connection() = default;
 
     Connection(std::string mcast, uint16_t port, unsigned int ttl) : mcast(std::move(mcast)),
+                                                                     local(std::string(20, 0)),
                                                                      port(port),
                                                                      ttl(ttl) {}
+
     int openUDPSocket();
 
     int openTCPSocket();
@@ -62,33 +66,44 @@ public:
 
     static ConnectionResponse readFromUDPSocket(int sock);
 
-    static void sendToSocket(int sock, sockaddr_in address, const std::shared_ptr<Message>& message);
+    static void sendToSocket(int sock, sockaddr_in address, const std::shared_ptr<Message> &message);
 
-    static int getPort(int sock) {
+    static uint16_t getPort(int sock) {
         struct sockaddr_in sin{};
         int addrlen = sizeof(sin);
-        getsockname(sock, (struct sockaddr *)&sin, (socklen_t *) &addrlen);
-        return sin.sin_port;
+        getsockname(sock, (struct sockaddr *) &sin, (socklen_t *) &addrlen);
+        std::cerr << sock << " " << ntohs(sin.sin_port);
+        return ntohs(sin.sin_port);
     }
 
     static void closeSocket(int sock);
 
     static void receiveFile(int sock, FILE *file);
 
-    void sendFile(int sock, const std::string& path);
+    void sendFile(int sock, const std::string &path);
 
-    void multicast(int sock, const std::shared_ptr<Message>& message);
+    void multicast(int sock, const std::shared_ptr<Message> &message);
 
     void addToMulticast(int sock);
 
     void setReceiver();
 
+    void setTimeout(int sock);
+
     std::string getMcast() const {
         return this->mcast;
     }
 
+    std::string getLocal() const {
+        return this->local;
+    }
+
     unsigned int getTtl() const {
         return this->ttl;
+    }
+
+    uint16_t getTCPport() const {
+        return this->TCPport;
     }
 };
 

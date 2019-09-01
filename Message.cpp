@@ -61,8 +61,9 @@ std::shared_ptr<Message> Message::getResponse() {
 }
 
 void Message::completeMessage(int par, std::vector<my_byte> dat) {
+    this->setParam(0);
     this->setParam(par);
-    this->setData(std::move(dat));
+    this->setData(dat);
 }
 
 my_byte * Message::getRawData() {

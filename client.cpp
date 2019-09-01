@@ -9,7 +9,7 @@ void ClientNode::listen() {
         readUserInput();
     }
 
-    for (int k = 1; k < fds.size(); ++k) {
+    for (size_t k = 1; k < fds.size(); ++k) {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
             handleFileReceiving(fds[k].fd);
@@ -50,16 +50,18 @@ void ClientNode::handleFileDownloaded(int fd) {
 void ClientNode::handleFileSending() {
     for (auto f : pendingFiles) {
         int sock = f.getSock();
-        auto request = clientRequests.at(sock);
-        try {
-            int result = f.handleSending();
-            if (result) {
-                std::cout << "File " + request.filename + " uploaded (" + inet_ntoa(request.server.sin_addr) + ":" +
-                             std::to_string(ntohl(request.server.sin_port)) + ")\n";
+        if (sock != -1) {
+            auto request = clientRequests.at(sock);
+            try {
+                int result = f.handleSending();
+                if (result) {
+                    std::cout << "File " + request.filename + " uploaded (" + inet_ntoa(request.server.sin_addr) + ":" +
+                                 std::to_string(ntohl(request.server.sin_port)) + ")\n";
+                }
+            } catch (NetstoreException &e) {
+                std::cout << "File " + request.filename + " uploading failed (" + inet_ntoa(request.server.sin_addr) + ":" +
+                             std::to_string(ntohl(request.server.sin_port)) + ")" + e.what() + " " + e.details() + "\n";
             }
-        } catch (NetstoreException &e) {
-            std::cout << "File " + request.filename + " uploading failed (" + inet_ntoa(request.server.sin_addr) + ":" +
-                         std::to_string(ntohl(request.server.sin_port)) + ")" + e.what() + " " + e.details() + "\n";
         }
     }
 }
@@ -97,6 +99,7 @@ void ClientNode::startConnection() {
         syserr("bind");
     }
     connection->setReceiver();
+    connection->setTimeout(this->sock);
 
     /* listen on user's input */
     fds[0] = {fileno(stdin), POLLIN, 0};
@@ -182,17 +185,17 @@ void ClientNode::fetch(const std::string &s) {
         }
 
         /* connect to server */
-        int port = responseMessage->getParam();
-        provider.sin_port = port;
+        uint16_t port = (uint16_t) responseMessage->getParam();
+        provider.sin_port = htons(port);
         int tcp = connection->openTCPSocket(provider);
 
         size_t i = 0;
         for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
         if (i == N) {
-            fds.push_back({tcp, POLLIN, 0});
-        } else {
-            fds.insert(fds.begin() + i, {tcp, POLLIN, 0});
+            throw NetstoreException("Too many open connections. Try again later.");
         }
+        fds.insert(fds.begin() + i, {tcp, POLLIN, 0});
+
     } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
                   << ")" << " Reason: " << e.what() << " " << e.details() << "\n";
@@ -258,7 +261,7 @@ void ClientNode::upload(const std::string &s) {
         if (i == pendingFiles.size()) {
             throw NetstoreException("Too many pending uploads.");
         } else {
-            pendingFiles.at(i).init(filename, tcp);
+            pendingFiles.at(i).init(filename, tcp, response.getCliaddr());
             pendingFiles.at(i).activate();
         }
     } catch (NetstoreException &e) {

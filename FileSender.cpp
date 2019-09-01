@@ -1,6 +1,6 @@
 #include "FileSender.h"
 
-void FileSender::init(std::string filename, int sock) {
+void FileSender::init(std::string filename, int sock, sockaddr_in clientAddr) {
     /* Open the file */
     if ((fd = open(filename.data(), O_RDONLY)) == -1) {
         throw FileException("Unable to open file " + filename);
@@ -9,6 +9,7 @@ void FileSender::init(std::string filename, int sock) {
     bytesSent = 0;
     buffer.clear();
     this->sock = sock;
+    this->clientAddr = clientAddr;
 }
 
 int FileSender::handleSending() {
@@ -25,6 +26,8 @@ int FileSender::handleSending() {
             close(sock);
             isSending = false;
             return 1;
+        } else if (bytesCount < 0) {
+            return 3;
         }
         bytesSent = 0;
     }
@@ -32,7 +35,7 @@ int FileSender::handleSending() {
     /* Send one chunk of the file */
     ssize_t bytes;
     if ((bytes = write(sock, buffer.data() + bytesSent, bytesCount - bytesSent)) < 0) {
-        throw MessageSendException("Cannot send message.");
+        return 3;
     }
 
     bytesSent += bytes;
