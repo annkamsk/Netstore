@@ -14,10 +14,9 @@ void invalid_option(const string &where, const string &val) {
 }
 
 ClientNode readOptions(int argc, char **argv) {
-    string MCAST_ADDR, SHRD_FLDR;
     unsigned int CMD_PORT;
     int TIMEOUT;
-    std::string OUT_FLDR;
+    std::string OUT_FLDR, MCAST_ADDR;
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -43,16 +42,16 @@ ClientNode readOptions(int argc, char **argv) {
         exit(1);
     }
 
-    return ClientNode(MCAST_ADDR, CMD_PORT, TIMEOUT, SHRD_FLDR);
+    return ClientNode(MCAST_ADDR, CMD_PORT, TIMEOUT, OUT_FLDR);
 }
 
 int main(int argc, char *argv[]) {
     ClientNode client = readOptions(argc, argv);
     client.startConnection();
 
+    std::cout <<"Write a command: \n";
     for (;;) {
         try {
-            std::cout <<"Write a command: \n";
             client.listen();
 
         } catch (NetstoreException &e) {

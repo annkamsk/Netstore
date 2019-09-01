@@ -3,13 +3,13 @@
 void ServerNode::createConnection() {
     int sock = connection->openUDPSocket();
     connection->addToMulticast(sock);
-    fds.insert(fds.begin(), {sock, POLLIN, 0});
+    fds.at(0) = {sock, POLLIN, 0};
     int tcpSock = connection->openTCPSocket();
-    fds.insert(fds.begin() + 1, {tcpSock, POLLIN, 0});
+    fds.at(1) = {tcpSock, POLLIN, 0};
 }
 
 void ServerNode::listen() {
-    poll(&fds[0], N, -1);
+    poll(&fds[0], N, 0);
 
     /* handle event on a UDP socket */
     if (fds[0].revents & POLLIN) {
@@ -19,33 +19,35 @@ void ServerNode::listen() {
     /* handle event on TCP socket */
     if (fds[1].revents & POLLIN) {
         fds[1].revents = 0;
-        std::cerr << "Got TCP event.";
+        std::cerr << "Got TCP event.\n";
         this->handleTCPConnection(fds[1].fd);
     }
-
     for (size_t k = 2; k < fds.size(); ++k) {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
             this->handleFileReceiving(fds[k].fd);
-        } else if (fds[k].fd != -1) {
-            /* check whether the socket is still open */
-            int buff;
-            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
-                int sock = fds[k].fd;
-                fclose(filesUploaded.at(sock));
-                filesUploaded.erase(sock);
-                close(sock);
-                fds[k].fd = -1;
-//                TODO clientRequests.erase(sock);
-            }
         }
+//        else if (fds[k].fd != -1) {
+//            /* check whether the socket is still open */
+//            int buff;
+//            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
+//                int sock = fds[k].fd;
+//                fclose(filesUploaded.at(sock));
+//                filesUploaded.erase(sock);
+//                close(sock);
+//                fds[k].fd = -1;
+//                TODO clientRequests.erase(sock);
+//            }
+//        }
     }
     handleFileSending();
 }
 
 void ServerNode::handleFileReceiving(int sock) {
-    auto file = filesUploaded.at(sock);
-    this->connection->receiveFile(sock, file);
+    if (filesUploaded.find(sock) != filesUploaded.end()) {
+        auto file = filesUploaded.at(sock);
+        this->connection->receiveFile(sock, file);
+    }
 }
 
 void ServerNode::handleFileSending() {
@@ -56,13 +58,15 @@ void ServerNode::handleFileSending() {
         auto request = clientRequests.at(clientId);
         int result = f.handleSending();
         switch (result) {
+            case 4:
+                std::cerr << "File " << request.filename << " uploading failed. Reason: could not open to read.";
+            case 3:
+                std::cerr << "File " << request.filename << " uploading failed. Reason:  Couldn't send message.\n";
             case 1:
-                /* uploading finished */
                 clientRequests.erase(clientId);
                 it = pendingFiles.erase(it);
                 break;
-            case 3:
-                std::cout << "File " << request.filename << " uploading failed. Reason:  Couldn't send message.\n";
+            case 0:
             default:
                 ++it;
         }
@@ -97,7 +101,7 @@ void ServerNode::handleTCPConnection(int sock) {
     if (clientRequest.isToSend) {
         /* initiate sending file */
         FileSender sender{};
-        sender.init(clientRequest.filename, newSock, clientAddr);
+        sender.init(path, newSock, clientAddr);
         sender.activate();
         pendingFiles.push_back(sender);
     } else {

@@ -88,14 +88,14 @@ int Connection::openTCPSocket(struct sockaddr_in provider) {
     server.sin_port = provider.sin_port;
 
     /* set to non-blocking */
-//    int flags;
-//    if ((flags = fcntl(sock, F_GETFL, 0)) == -1) {
-//        syserr("fcntl");
-//    }
-//    flags = flags & ~O_NONBLOCK;
-//    if (fcntl(sock, F_SETFL, flags) != 0) {
-//        syserr("fcntl");
-//    }
+    int flags;
+    if ((flags = fcntl(sock, F_GETFL, 0)) == -1) {
+        syserr("fcntl");
+    }
+    flags = flags & ~O_NONBLOCK;
+    if (fcntl(sock, F_SETFL, flags) != 0) {
+        syserr("fcntl");
+    }
 
     if (connect(sock, (struct sockaddr *) &server, sizeof(server)) == -1) {
         throw NetstoreException("Cannot connect to the server's socket.");
@@ -150,47 +150,19 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
 }
 
 
-void Connection::receiveFile(int sock, FILE *file) {
-    std::vector<my_byte> buffer(Netstore::BUFFER_LEN);
+int Connection::receiveFile(int sock, FILE *file) {
+    std::vector<my_byte> buffer(Netstore::BUFFER_LEN, 0);
     ssize_t len;
-    do {
-        if ((len = read(sock, buffer.data(), buffer.size())) < 0) {
-            throw MessageSendException("There was problem with read, while receiving files from server.\n");
-        }
-        std::cout << "Read " << len << " my_bytes from socket.\n";
-        fwrite(std::vector<my_byte>(buffer.begin(), buffer.begin() + len).data(), sizeof(my_byte), len, file);
-        buffer.clear();
-    } while (len > 0);
-}
-
-void Connection::sendFile(int sock, const std::string& path) {
-    /* opening the file */
-    FILE *file;
-    if ((file = fopen(path.data(), "rb")) == nullptr) {
-        throw FileException("Cannot open the file: " + path);
+    if ((len = read(sock, buffer.data(), buffer.size())) < 0) {
+        throw MessageSendException("There was problem with read, while receiving files from server.\n");
     }
-
-    /* get the size */
-    long fileSize;
-    if (fseek(file, 0, SEEK_END) != 0 || (fileSize = ftell(file)) == -1L || fseek(file, 0, SEEK_SET) != 0) {
-        throw FileException("Problem with operating on file: " + path);
+    if (len == 0) {
+        return 1;
     }
-
-    while (fileSize > 0) {
-        size_t to_send = fileSize > Netstore::MAX_UDP_PACKET_SIZE ? Netstore::MAX_UDP_PACKET_SIZE : fileSize;
-
-        /* read the data */
-        std::vector<my_byte> vec(to_send, '\0');
-        fread(vec.data(), sizeof(my_byte), to_send, file);
-
-        ssize_t read;
-        if ((read = write(sock, vec.data(), to_send)) < 0) {
-            throw PartialSendException("Sending of the file: " + path + " failed.");
-        } else {
-            std::cerr << "Sent " << read << "bytes\n";
-            fileSize -= read;
-        }
-    }
+    std::cout << "Read " << len << " my_bytes from socket.\n";
+    fwrite(buffer.data(), sizeof(my_byte), len, file);
+    buffer.clear();
+    return 0;
 }
 
 void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::shared_ptr<Message> &message) {

@@ -78,9 +78,7 @@ public:
 
     static void closeSocket(int sock);
 
-    static void receiveFile(int sock, FILE *file);
-
-    void sendFile(int sock, const std::string &path);
+    static int receiveFile(int sock, FILE *file);
 
     void multicast(int sock, const std::shared_ptr<Message> &message);
 

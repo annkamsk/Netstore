@@ -16,10 +16,8 @@ namespace fs = std::experimental::filesystem;
 class ClientNode {
 
     struct ClientRequest {
-        bool isDownloadActive;
         std::string filename;
         sockaddr_in server;
-        FILE *f;
     };
 private:
     void discover();
@@ -52,13 +50,14 @@ private:
     std::unordered_map<std::string, std::queue<sockaddr_in>> files{};
     std::map<uint64_t , std::queue<sockaddr_in>> memory{};
     std::unordered_map<int, ClientRequest> clientRequests;
+    std::unordered_map<int, FILE *> requestedFiles{};
 
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
-            pendingFiles(std::vector<FileSender>(N, FileSender())){}
+            pendingFiles(std::vector<FileSender>()) {}
 
     void addFile(const std::string &filename, sockaddr_in addr);
 

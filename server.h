@@ -13,7 +13,7 @@ class ServerNode {
         bool isActive;
     };
 
-    const static int N = 256;
+    const static int N = 20;
 private:
     std::vector<std::string> files;
     std::string folder;
@@ -30,6 +30,7 @@ public:
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
+            pendingFiles(std::vector<FileSender>()),
             memory(memory) {};
 
     void addFile(const std::string &filename, uint64_t size) {

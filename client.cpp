@@ -1,12 +1,13 @@
 #include "client.h"
 
 void ClientNode::listen() {
-    poll(&fds[0], N, -1);
+    poll(&fds[0], N, 0);
 
     /* handle event on a STDIN */
     if (fds[0].revents & POLLIN) {
         fds[0].revents = 0;
         readUserInput();
+        std::cout <<"Write a command: \n";
     }
 
     for (size_t k = 1; k < fds.size(); ++k) {
@@ -27,24 +28,24 @@ void ClientNode::listen() {
 
 void ClientNode::handleFileReceiving(int fd) {
     /* make the tcp sockets non blocking */
-    auto request = this->clientRequests.at(fd);
-    if (!request.isDownloadActive) {
-        if ((request.f = fopen(request.filename.data(), "rb")) == nullptr) {
-            throw FileException("Cannot open file " + request.filename + " for downloading data.");
+    if (this->requestedFiles.find(fd) != requestedFiles.end()) {
+        auto f = this->requestedFiles.at(fd);
+        if (this->connection->receiveFile(fd, f)) {
+            handleFileDownloaded(fd);
         }
-        request.isDownloadActive = true;
     }
-    this->connection->receiveFile(fd, request.f);
 }
 
 void ClientNode::handleFileDownloaded(int fd) {
     auto request = clientRequests.at(fd);
+    auto file = requestedFiles.at(fd);
     std::cout << "File " << request.filename << " downloaded" << " (" << inet_ntoa(request.server.sin_addr) << ":"
               << ntohl(request.server.sin_port) << ")\n";
-    if (fclose(request.f) < 0) {
+    if (fclose(file) < 0) {
         throw FileException("Unable to close downloaded file.");
     }
     clientRequests.erase(fd);
+    requestedFiles.erase(fd);
 }
 
 void ClientNode::handleFileSending() {
@@ -194,7 +195,14 @@ void ClientNode::fetch(const std::string &s) {
         if (i == N) {
             throw NetstoreException("Too many open connections. Try again later.");
         }
-        fds.insert(fds.begin() + i, {tcp, POLLIN, 0});
+        fds.at(i) = {tcp, POLLIN, 0};
+        FILE *f;
+        std::string path(folder + "/" + filename);
+        if ((f = fopen(path.data(), "wb")) == nullptr) {
+            throw FileException("Could not open file " + path + " for writing.");
+        }
+        requestedFiles.insert({tcp, f});
+        clientRequests.insert({tcp, {path, provider}});
 
     } catch (NetstoreException &e) {
         std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
@@ -252,9 +260,9 @@ void ClientNode::upload(const std::string &s) {
         size_t i = 0;
         for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
         if (i == N) {
-            fds.push_back({tcp, POLLOUT, (short) this->connection->getTtl()});
+            throw NetstoreException("Too many open connections. Try again later.");
         } else {
-            fds.insert(fds.begin() + i, {tcp, POLLOUT, (short) this->connection->getTtl()});
+            fds.at(i) = {tcp, POLLOUT, (short) this->connection->getTtl()};
         }
         i = 0;
         for (; i < pendingFiles.size() && pendingFiles.at(i).getIsSending(); ++i) {}
