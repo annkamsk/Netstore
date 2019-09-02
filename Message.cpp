@@ -30,8 +30,6 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<my_byte> &data,
 
     /* set data */
     message->setData(std::vector<my_byte>(data.begin() + message->getDataStart(), data.begin() + size));
-    std::cerr << "\nMessage data size : " << message->getData().size() << "\n";
-
     return message;
 }
 

@@ -38,6 +38,7 @@ public:
         return filename;
     }
 
+    void closeConnection();
 };
 
 

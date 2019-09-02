@@ -48,8 +48,8 @@ private:
     std::vector<pollfd> fds;
     std::vector<FileSender> uploadFiles;
 
-    std::unordered_map<std::string, std::queue<sockaddr_in>> files{};
-    std::map<uint64_t , std::queue<sockaddr_in>> memory{};
+    std::unordered_map<std::string, std::vector<sockaddr_in>> files{};
+    std::map<uint64_t, std::vector<sockaddr_in>, std::greater<>> memory{};
     std::unordered_map<int, ClientRequest> downloadRequests;
 
     MessageBuilder messageBuilder;
@@ -77,5 +77,9 @@ public:
     void handleFileSending();
 
     int connectWithServer(uint64_t param, sockaddr_in &addr);
+
+    sockaddr_in findServer(const std::string &s, size_t size);
+
+    bool hasFile(sockaddr_in server, const std::string& file);
 };
 #endif //SIK2_CLIENT_H

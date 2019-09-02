@@ -78,10 +78,7 @@ int Connection::openTCPSocket(struct sockaddr_in provider) {
         syserr("socket");
     }
 
-    struct sockaddr_in server{};
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = provider.sin_addr.s_addr;
-    server.sin_port = provider.sin_port;
+    provider.sin_family = AF_INET;
 
     /* set to non-blocking */
     int flags;
@@ -93,7 +90,7 @@ int Connection::openTCPSocket(struct sockaddr_in provider) {
         syserr("fcntl");
     }
 
-    if (connect(sock, (struct sockaddr *) &server, sizeof(server)) == -1) {
+    if (connect(sock, (struct sockaddr *) &provider, sizeof(provider)) == -1) {
         throw NetstoreException("Cannot connect to the server's socket.");
     }
     return sock;
@@ -101,7 +98,6 @@ int Connection::openTCPSocket(struct sockaddr_in provider) {
 
 void Connection::setReceiver() {
     char *remote_dotted_address = this->mcast.data();
-
     remote_address.sin_family = AF_INET;
     remote_address.sin_port = htons(this->port);
     if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
@@ -113,8 +109,7 @@ void Connection::setTimeout(int sock) {
     struct timeval tv{};
     tv.tv_sec = ttl;
     tv.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*) &tv, sizeof tv);
 }
 
 void Connection::multicast(int sock, const std::shared_ptr<Message> &message) {
@@ -123,7 +118,6 @@ void Connection::multicast(int sock, const std::shared_ptr<Message> &message) {
                sizeof(remote_address)) < 0) {
         syserr("sendto");
     }
-    std::cerr << "Sent: " << data << "\n" << std::flush;
     free(data);
 }
 
@@ -137,8 +131,8 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     if (singleLen < 0) {
         throw NetstoreException("Timeout while waiting for connection.");
     } else {
-        std::cerr << "\nread " << singleLen << " bytes: " << buffer.data() << " from: "
-                  << inet_ntoa(response.getCliaddr().sin_addr) << std::flush;
+//        std::cerr << "\nread " << singleLen << " bytes: " << buffer.data() << " from: "
+//                  << inet_ntoa(response.getCliaddr().sin_addr) << std::flush;
     }
     response.setBuffer(buffer);
     response.setSize(singleLen);
@@ -160,15 +154,19 @@ int Connection::receiveFile(int sock, FILE *file) {
     return 0;
 }
 
+sockaddr_in Connection::getAddr(int sock) {
+    sockaddr_in addr{};
+    socklen_t len = sizeof(sockaddr_in);
+    getsockname(sock, (sockaddr *)&addr, &len);
+    return addr;
+}
+
 void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::shared_ptr<Message> &message) {
     auto messageRaw = message->getRawData();
     ssize_t len = message->getSize();
     ssize_t snd_len = sendto(sock, messageRaw, len, 0, (struct sockaddr *) &address, sizeof(address));
     if (snd_len != len) {
         throw PartialSendException();
-    }
-    for (ssize_t i = 0; i < snd_len; ++i) {
-        fprintf(stderr, "[%c]", messageRaw[i]);
     }
     free(messageRaw);
 }

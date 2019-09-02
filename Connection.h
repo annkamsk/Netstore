@@ -72,7 +72,6 @@ public:
         struct sockaddr_in sin{};
         int addrlen = sizeof(sin);
         getsockname(sock, (struct sockaddr *) &sin, (socklen_t *) &addrlen);
-        std::cerr << sock << " " << ntohs(sin.sin_port);
         return ntohs(sin.sin_port);
     }
 
@@ -99,6 +98,8 @@ public:
     uint16_t getTCPport() const {
         return this->TCPport;
     }
+
+    sockaddr_in getAddr(int sock);
 };
 
 #endif //SIK2_CONNECTION_H

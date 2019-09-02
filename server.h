@@ -5,9 +5,8 @@
 #include "FileSender.h"
 
 class ServerNode {
-    // TODO timeout
     struct ClientRequest {
-        clock_t timeout;
+        time_t timeout;
         std::string filename;
         bool isToSend;
         bool isActive;
@@ -75,7 +74,11 @@ public:
 
     void handleFileSending();
 
-    void handleFileReceiving(int sock);
+    int handleFileReceiving(int sock);
+
+    int tryAccept(int sock);
+
+    void handleTCPConnection(int newSock, sockaddr_in clientAddr, int k);
 };
 
 #endif //SIK2_SERVER_H

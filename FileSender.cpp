@@ -32,8 +32,12 @@ int FileSender::handleSending() {
     if ((bytes = write(sock, buffer.data() + bytesSent, bytesCount - bytesSent)) < 0) {
         throw MessageSendException("Cannot write data to socket.");
     }
-//    std::cerr << "Sent " << bytes << " of data.\n";
 
     bytesSent += bytes;
     return 0;
+}
+
+void FileSender::closeConnection() {
+    close(fd);
+    close(sock);
 }

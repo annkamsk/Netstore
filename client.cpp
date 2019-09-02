@@ -14,13 +14,6 @@ void ClientNode::listen() {
         if (fds[k].fd != -1 && ((fds[k].revents & POLLIN) | POLLERR)) {
             fds[k].revents = 0;
             handleFileReceiving(fds[k].fd);
-        } else if (fds[k].fd != -1) {
-            /* check whether the socket is still open */
-            int buff;
-            if (recv(fds[k].fd, &buff, sizeof(buff), MSG_PEEK) == 0) {
-                handleFileDownloaded(fds[k].fd);
-                fds[k].fd = -1;
-            }
         }
     }
     handleFileSending();
@@ -38,7 +31,7 @@ void ClientNode::handleFileReceiving(int fd) {
 void ClientNode::handleFileDownloaded(int fd) {
     auto request = downloadRequests.at(fd);
     std::cout << "File " << request.filename << " downloaded" << " (" << inet_ntoa(request.server.sin_addr) << ":"
-              << ntohl(request.server.sin_port) << ")\n";
+              << ntohs(request.server.sin_port) << ")\n";
     if (fclose(request.f) < 0) {
         throw FileException("Unable to close downloaded file.");
     }
@@ -51,16 +44,17 @@ void ClientNode::handleFileSending() {
         auto f = *it;
         try {
             if (f.handleSending()) {
-                std::cout << "File " + f.getFilename() + " uploaded (" + inet_ntoa(f.getClientAddr().sin_addr) + ":" +
-                             std::to_string(ntohl(f.getClientAddr().sin_port)) + ")\n";
+                std::cout << "File " + f.getFilename() + " uploaded (" + inet_ntoa(f.getClientAddr().sin_addr) + ":" <<
+                             ntohs(f.getClientAddr().sin_port) << ")\n";
                 it = uploadFiles.erase(it);
             } else {
                 ++it;
             }
         } catch (NetstoreException &e) {
-            std::cout << "File " + f.getFilename() + " uploading failed (" + inet_ntoa(f.getClientAddr().sin_addr) + ":" +
-                       std::to_string(ntohl(f.getClientAddr().sin_port)) + ")" + e.what() + " " + e.details() + "\n";
-            // TODO close
+            std::cout
+                    << "File " + f.getFilename() + " uploading failed (" + inet_ntoa(f.getClientAddr().sin_addr) + ":"<<
+                    ntohs(f.getClientAddr().sin_port) << ")" << e.what() << " " << e.details() << "\n";
+            it->closeConnection();
             it = uploadFiles.erase(it);
         }
     }
@@ -110,24 +104,32 @@ void ClientNode::discover() {
     auto message = messageBuilder.create("HELLO");
     this->connection->multicast(this->sock, message);
 
-    // TODO wait for TTL for responses
-    auto response = this->connection->readFromUDPSocket(this->sock);
-
+    /* delete servers from previous search */
+    this->memory.clear();
     try {
-        auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        time_t start = time(nullptr);
+        time_t now = time(nullptr);
+        pollfd udp = {this->sock, POLLIN, 0};
+        /* take only responses from ttl period */
+        while (now - start < this->connection->getTtl()) {
+            if (poll(&udp, 1, 0) > 0) {
+                auto response = this->connection->readFromUDPSocket(this->sock);
+                auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
 
-        /* save the server with its free space */
-        auto address = response.getCliaddr();
-        auto space = responseMessage->getParam();
-        if (this->memory.find(space) == this->memory.end()) {
-            this->memory.insert({space, std::queue<sockaddr_in>()});
+                /* save the server with its free space */
+                auto address = response.getCliaddr();
+                auto space = responseMessage->getParam();
+                if (this->memory.find(space) == this->memory.end()) {
+                    this->memory.insert({space, std::vector<sockaddr_in>()});
+                }
+                this->memory.at(space).push_back(address);
+                std::cout << "Found " << inet_ntoa(address.sin_addr) << " (" << responseMessage->getData().data()
+                          << ") with free space " << space << "\n";
+            }
+            now = time(nullptr);
         }
-        this->memory.at(space).push(address);
-        std::cout << "Found " << inet_ntoa(address.sin_addr) << " (" << responseMessage->getData().data()
-                  << ") with free space " << space << "\n";
-    } catch (std::exception &e) {
-        std::cerr << "[PCKG ERROR]  Skipping invalid package from " << inet_ntoa(response.getCliaddr().sin_addr) << ":"
-                  << response.getCliaddr().sin_port << ". Reason: " << e.what() << "\n";
+    } catch (NetstoreException &e) {
+        std::cerr << e.what() << " " << e.details();
     }
 }
 
@@ -136,25 +138,37 @@ void ClientNode::search(const std::string &s) {
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
 
-    // TODO wait TTL for response
-    auto response = this->connection->readFromUDPSocket(this->sock);
+    /* delete filenames from previous search */
+    this->files.clear();
     try {
-        auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        time_t start = time(nullptr);
+        time_t now = time(nullptr);
+        pollfd udp = {this->sock, POLLIN, 0};
 
-        /* get filenames from data */
-        std::vector<std::string> filenames;
-        boost::split(filenames, responseMessage->getData(), [](char c) { return c == '\n'; });
+        /* take only responses from ttl period */
+        while (now - start < this->connection->getTtl()) {
+            if (poll(&udp, 1, 0) > 0) {
+                udp.revents = 0;
+                auto response = this->connection->readFromUDPSocket(this->sock);
+                auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(),
+                                                            response.getSize());
 
-        /* delete filenames from previous search */
-        this->files.clear();
-        /* save filenames and print them out */
-        for (const auto &f : filenames) {
-            std::cout << f << " (" << inet_ntoa(response.getCliaddr().sin_addr) << ")\n";
-            addFile(f, response.getCliaddr());
+                /* get filenames from data */
+                std::vector<std::string> filenames;
+                boost::split(filenames, responseMessage->getData(), [](char c) { return c == '\n'; });
+
+                /* save filenames and print them out */
+                for (const auto &f : filenames) {
+                    if (!std::all_of(f.begin(), f.end(), isspace)) {
+                        std::cout << f << " (" << inet_ntoa(response.getCliaddr().sin_addr) << ")\n";
+                        addFile(f, response.getCliaddr());
+                    }
+                }
+            }
+            now = time(nullptr);
         }
     } catch (WrongSeqException &e) {
-        std::cerr << "[PCKG ERROR]  Skipping invalid package from " << response.getCliaddr().sin_addr.s_addr << ":"
-                  << response.getCliaddr().sin_port << ".\n";
+        std::cerr << e.what() << e.details();
     }
 }
 
@@ -166,11 +180,10 @@ void ClientNode::fetch(const std::string &s) {
     auto message = messageBuilder.create("GET");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
 
-    /* choose provider and move it to the end of queue */
+    /* choose provider */
     auto provider = servers->second.front();
-    servers->second.pop();
-    servers->second.push(provider);
 
+    int newPort = 0;
     try {
         /* send request for file */
         this->connection->sendToSocket(sock, provider, message);
@@ -183,8 +196,8 @@ void ClientNode::fetch(const std::string &s) {
         if (filename != s) {
             throw NetstoreException("Server wants to send a wrong file.");
         }
-
-        int tcp = connectWithServer(responseMessage->getParam(), provider);
+        newPort = responseMessage->getParam();
+        int tcp = connectWithServer(newPort, provider);
 
         FILE *f;
         std::string path(folder + "/" + filename);
@@ -194,9 +207,8 @@ void ClientNode::fetch(const std::string &s) {
         downloadRequests.insert({tcp, {path, provider, f}});
 
     } catch (NetstoreException &e) {
-        std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << provider.sin_port
+        std::cout << "File " << s << " downloading failed (" << inet_ntoa(provider.sin_addr) << ":" << newPort
                   << ")" << " Reason: " << e.what() << " " << e.details() << "\n";
-        // TODO close sock
     }
 }
 
@@ -207,23 +219,15 @@ void ClientNode::upload(const std::string &s) {
         std::cout << "ERROR: File " + s + " does not exist\n";
         return;
     }
+    size_t size = fs::file_size(file);
 
     /* get server with max memory space */
-    auto max = this->memory.rbegin();
-
-    /* check if there is enough space */
-    uint64_t size = fs::file_size(file);
-    if (size > max->first) {
-        throw FileException("File " + s + " too big.");
-    }
-
-    auto server = max->second.front();
-    max->second.pop();
-    max->second.push(server);
+    auto server = findServer(s, size);
 
     auto message = messageBuilder.create("ADD");
     message->completeMessage(htobe64(size), std::vector<my_byte>(s.begin(), s.end()));
 
+    int newPort = 0;
     try {
         /* send request for upload */
         this->connection->sendToSocket(this->sock, server, message);
@@ -235,21 +239,20 @@ void ClientNode::upload(const std::string &s) {
             throw NetstoreException("Server does not agree for uploading this file.");
         }
 
-        std::string filename = std::string(responseMessage->getData().begin(), responseMessage->getData().end());
+        std::string filename(responseMessage->getData().begin(), responseMessage->getData().end());
         /* if the filename is wrong */
         if (filename != s) {
             throw NetstoreException("Server wants to receive a wrong file.");
         }
-
-        int tcp = connectWithServer(responseMessage->getParam(), server);
+        newPort = responseMessage->getParam();
+        int tcp = connectWithServer(newPort, server);
         FileSender sender{};
         sender.init(filename, tcp, server);
         uploadFiles.push_back(sender);
 
     } catch (NetstoreException &e) {
-        std::cout << "File " + s + " uploading failed (" + inet_ntoa(server.sin_addr) + ":" +
-                     std::to_string(ntohl(server.sin_port)) + ") " + e.what() + e.details() + "\n";
-        // TODO close
+        std::cout << "File " + s + " uploading failed (" + inet_ntoa(server.sin_addr) + ":" << newPort << ") "
+                  << e.what() << " " << e.details() << "\n";
     }
 
 }
@@ -262,10 +265,40 @@ int ClientNode::connectWithServer(uint64_t param, sockaddr_in &addr) {
     size_t i = 0;
     for (; i < fds.size() && fds.at(i).fd != -1; ++i) {}
     if (i == fds.size()) {
+        close(tcp);
         throw NetstoreException("Too many open connections. Try again later.");
     }
     fds.at(i) = {tcp, POLLIN, 0};
     return tcp;
+}
+
+sockaddr_in ClientNode::findServer(const std::string &s, size_t size) {
+    auto excluded = this->files.find(s);
+    std::vector<sockaddr_in> serversExcluded = excluded == files.end() ? std::vector<sockaddr_in>{} : this->files.at(s);
+
+    /* iterate servers starting from these with the biggest memory */
+    for (auto &it : memory) {
+        if (size > it.first) {
+            throw FileException("File " + s + " too big.");
+        }
+        for (auto &server : it.second) {
+            if (!hasFile(server, s)) {
+                /* if it doesn't have the file yet */
+                return server;
+            }
+        }
+    }
+    throw FileException("File " + s + " too big.");
+}
+
+bool ClientNode::hasFile(sockaddr_in server, const std::string& file) {
+    if (this->files.find(file) == this->files.end()) {
+        return false;
+    }
+    std::vector<sockaddr_in> excluded = this->files.at(file);
+    return std::find_if(excluded.begin(), excluded.end(),
+                        [&server](sockaddr_in addr) { return addr.sin_addr.s_addr == server.sin_addr.s_addr; }) !=
+           excluded.end();
 }
 
 void ClientNode::remove(const std::string &s) {
@@ -280,14 +313,18 @@ void ClientNode::remove(const std::string &s) {
 void ClientNode::exit() {
     for (auto fd : fds) {
         if (fd.fd != -1) {
-            connection->closeSocket(fd.fd);
+            if (downloadRequests.find(fd.fd) != downloadRequests.end()) {
+                auto request = downloadRequests.at(fd.fd);
+                fclose(request.f);
+            }
             downloadRequests.erase(fd.fd);
-            fd.fd = -1;
+            connection->closeSocket(fd.fd);
         }
     }
+    std::exit(0);
 }
 
 void ClientNode::addFile(const std::string &filename, sockaddr_in addr) {
-    this->files[filename].push(addr);
+    this->files[filename].push_back(addr);
 }
 

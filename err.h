@@ -40,7 +40,7 @@ namespace Netstore {
     const static unsigned MAX_SMPL_CMD_SIZE = 274;
 
     const static unsigned BUFFER_LEN = 2048;
-    const static unsigned MAX_UDP_PACKET_SIZE = 1024;
+    const static unsigned MAX_UDP_PACKET_SIZE = 65507;
 
     inline std::string getKey(sockaddr_in addr) {
         auto ip = inet_ntoa(addr.sin_addr);
