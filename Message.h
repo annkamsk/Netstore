@@ -70,11 +70,10 @@ public:
 };
 
 class MessageBuilder {
-    inline static std::vector<std::string> complexMessages = { "GOOD_DAY", "CONNECT_ME", "ADD", "CAN_ADD"};
-    inline static std::vector<std::string> simpleMessages = { "HELLO", "LIST", "MY_LIST", "GET", "DEL", "NO_WAY"};
+    const std::vector<std::string> complexMessages = { "GOOD_DAY", "CONNECT_ME", "ADD", "CAN_ADD"};
+    const std::vector<std::string> simpleMessages = { "HELLO", "LIST", "MY_LIST", "GET", "DEL", "NO_WAY"};
 public:
-
-    inline static std::unordered_map<std::string, std::string> responseMap = {
+    std::unordered_map<std::string, std::string> responseMap = {
             {"HELLO", "GOOD_DAY"},
             {"LIST", "MY_LIST"},
             {"GET", "CONNECT_ME"},
@@ -85,20 +84,20 @@ public:
 public:
     MessageBuilder() = default;
 
-    static std::shared_ptr<Message> create(std::string cmd);
+    std::shared_ptr<Message> create(std::string cmd);
 
-    static std::shared_ptr<Message> build(const std::vector<my_byte> &data, uint64_t seq, size_t size);
+    std::shared_ptr<Message> build(const std::vector<my_byte> &data, uint64_t seq, size_t size);
 
-    static bool isComplex(std::string cmd) {
+    bool isComplex(std::string cmd) {
         return std::any_of(complexMessages.begin(), complexMessages.end(), [&cmd](std::string s) { return s == cmd;});
     }
 
-    static bool isSimple(std::string cmd) {
+    bool isSimple(std::string cmd) {
         return std::any_of(simpleMessages.begin(), simpleMessages.end(), [&cmd](std::string s) { return s == cmd;});
     }
 
 private:
-    static std::string parseCmd(const std::vector<my_byte> &data);
+    std::string parseCmd(const std::vector<my_byte> &data);
 };
 
 #endif //SIK2_MESSAGE_H

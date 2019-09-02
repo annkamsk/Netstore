@@ -8,7 +8,7 @@ std::shared_ptr<Message> MessageBuilder::build(const std::vector<my_byte> &data,
     }
 
     /* set cmd */
-    std::string cmd = MessageBuilder::parseCmd(data);
+    std::string cmd = parseCmd(data);
     std::shared_ptr<Message> message = create(cmd);
 
     /* set seq*/
@@ -54,7 +54,7 @@ std::shared_ptr<Message> MessageBuilder::create(std::string cmd) {
 }
 
 std::shared_ptr<Message> Message::getResponse() {
-    std::string responseCmd = MessageBuilder::responseMap.at(this->getCmd());
+    std::string responseCmd = MessageBuilder().responseMap.at(this->getCmd());
     auto message = MessageBuilder().create(responseCmd);
     message->setSeq(cmd_seq);
     return message;

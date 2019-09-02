@@ -23,6 +23,8 @@ private:
     std::unordered_map<int, FILE *> filesUploaded;
     std::vector<FileSender> pendingFiles{};
     uint64_t memory{};
+
+    MessageBuilder messageBuilder;
 public:
 
     ServerNode(const std::string &mcast, unsigned port, unsigned long long memory, unsigned int timeout,
@@ -31,7 +33,8 @@ public:
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
             pendingFiles(std::vector<FileSender>()),
-            memory(memory) {};
+            memory(memory),
+            messageBuilder(MessageBuilder()) {};
 
     void addFile(const std::string &filename, uint64_t size) {
         this->files.push_back(filename);

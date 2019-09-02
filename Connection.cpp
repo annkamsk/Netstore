@@ -69,10 +69,6 @@ int Connection::openTCPSocket() {
     }
     /* save port and IP address */
     this->TCPport = getPort(sock);
-    struct sockaddr_in addr;
-    socklen_t addr_size = sizeof(struct sockaddr_in);
-    int res = getpeername(sock, (struct sockaddr *) &addr, &addr_size);
-    strcpy(local.data(), inet_ntoa(addr.sin_addr));
     return sock;
 }
 
@@ -139,7 +135,7 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
     ssize_t singleLen = recvfrom(sock, buffer.data(), Netstore::MAX_UDP_PACKET_SIZE, 0,
                                  (struct sockaddr *) &response.getCliaddr(), &len);
     if (singleLen < 0) {
-        throw NetstoreException("Timeout while waiting for server to initiate the connection.");
+        throw NetstoreException("Timeout while waiting for connection.");
     } else {
         std::cerr << "\nread " << singleLen << " bytes: " << buffer.data() << " from: "
                   << inet_ntoa(response.getCliaddr().sin_addr) << std::flush;
@@ -159,7 +155,6 @@ int Connection::receiveFile(int sock, FILE *file) {
     if (len == 0) {
         return 1;
     }
-//    std::cout << "Read " << len << " my_bytes from socket.\n";
     fwrite(buffer.data(), sizeof(my_byte), len, file);
     buffer.clear();
     return 0;
@@ -172,8 +167,7 @@ void Connection::sendToSocket(int sock, struct sockaddr_in address, const std::s
     if (snd_len != len) {
         throw PartialSendException();
     }
-    std::cerr << "\nSent " << snd_len << " bytes of data to " << inet_ntoa(address.sin_addr) << ": ";
-    for (size_t i = 0; i < snd_len; ++i) {
+    for (ssize_t i = 0; i < snd_len; ++i) {
         fprintf(stderr, "[%c]", messageRaw[i]);
     }
     free(messageRaw);

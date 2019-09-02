@@ -119,7 +119,7 @@ void ServerNode::handleTCPConnection(int sock) {
 
 void ServerNode::handleUDPConnection(int sock) {
     auto request = this->connection->readFromUDPSocket(sock);
-    auto message = MessageBuilder::build(request.getBuffer(), 0, request.getSize());
+    auto message = messageBuilder.build(request.getBuffer(), 0, request.getSize());
 
     if (message->getCmd() == "LIST") {
         sendList(sock, request, message);
@@ -159,8 +159,8 @@ std::vector<my_byte> ServerNode::getFiles(const std::vector<my_byte> &s) {
 
 void ServerNode::sendGreeting(int sock, const ConnectionResponse &request, const std::shared_ptr<Message> &message) {
     auto response = message->getResponse();
-    response->completeMessage(memory,
-                              std::vector<my_byte>(connection->getMcast().begin(), connection->getMcast().end()));
+    std::vector<my_byte> addr(connection->getMcast().begin(), connection->getMcast().end());
+    response->completeMessage(memory, addr);
     connection->sendToSocket(sock, request.getCliaddr(), response);
 }
 
@@ -193,12 +193,12 @@ void ServerNode::prepareUpload(int sock, const ConnectionResponse &request, cons
         auto clientAddr = request.getCliaddr();
         clientRequests.insert({Netstore::getKey(clientAddr), {clock(), filename, false, false}});
 
-        auto response = MessageBuilder::create("CAN_ADD");
+        auto response = messageBuilder.create("CAN_ADD");
         response->setSeq(message->getCmdSeq());
         response->completeMessage(port, std::vector<my_byte>(filename.begin(), filename.end()));
         connection->sendToSocket(sock, request.getCliaddr(), response);
     } else {
-        auto response = MessageBuilder::create("NO_WAY");
+        auto response = messageBuilder.create("NO_WAY");
         response->setSeq(message->getCmdSeq());
         response->setData(std::vector<my_byte>(filename.begin(), filename.end()));
         connection->sendToSocket(sock, request.getCliaddr(), response);

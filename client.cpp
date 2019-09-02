@@ -107,14 +107,14 @@ void ClientNode::startConnection() {
 
 
 void ClientNode::discover() {
-    auto message = MessageBuilder::create("HELLO");
+    auto message = messageBuilder.create("HELLO");
     this->connection->multicast(this->sock, message);
 
     // TODO wait for TTL for responses
     auto response = this->connection->readFromUDPSocket(this->sock);
 
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
 
         /* save the server with its free space */
         auto address = response.getCliaddr();
@@ -132,14 +132,14 @@ void ClientNode::discover() {
 }
 
 void ClientNode::search(const std::string &s) {
-    auto message = MessageBuilder::create("LIST");
+    auto message = messageBuilder.create("LIST");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
 
     // TODO wait TTL for response
     auto response = this->connection->readFromUDPSocket(this->sock);
     try {
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
 
         /* get filenames from data */
         std::vector<std::string> filenames;
@@ -163,7 +163,7 @@ void ClientNode::fetch(const std::string &s) {
     if (servers == this->files.end() || servers->second.empty()) {
         throw FileException("File not found on any server.");
     }
-    auto message = MessageBuilder::create("GET");
+    auto message = messageBuilder.create("GET");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
 
     /* choose provider and move it to the end of queue */
@@ -177,7 +177,7 @@ void ClientNode::fetch(const std::string &s) {
 
         /* read a response */
         auto response = this->connection->readFromUDPSocket(this->sock);
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
         std::string filename = std::string(responseMessage->getData().begin(), responseMessage->getData().end());
         /* if the filename is wrong */
         if (filename != s) {
@@ -221,7 +221,7 @@ void ClientNode::upload(const std::string &s) {
     max->second.pop();
     max->second.push(server);
 
-    auto message = MessageBuilder::create("ADD");
+    auto message = messageBuilder.create("ADD");
     message->completeMessage(htobe64(size), std::vector<my_byte>(s.begin(), s.end()));
 
     try {
@@ -230,7 +230,7 @@ void ClientNode::upload(const std::string &s) {
 
         /* read a response */
         auto response = this->connection->readFromUDPSocket(this->sock);
-        auto responseMessage = MessageBuilder::build(response.getBuffer(), message->getCmdSeq(), response.getSize());
+        auto responseMessage = messageBuilder.build(response.getBuffer(), message->getCmdSeq(), response.getSize());
         if (responseMessage->getCmd() == "NO_WAY") {
             throw NetstoreException("Server does not agree for uploading this file.");
         }
@@ -272,7 +272,7 @@ void ClientNode::remove(const std::string &s) {
     if (s.empty()) {
         throw InvalidInputException();
     }
-    auto message = MessageBuilder::create("DEL");
+    auto message = messageBuilder.create("DEL");
     message->setData(std::vector<my_byte>(s.begin(), s.end()));
     this->connection->multicast(this->sock, message);
 }

@@ -52,12 +52,15 @@ private:
     std::map<uint64_t , std::queue<sockaddr_in>> memory{};
     std::unordered_map<int, ClientRequest> downloadRequests;
 
+    MessageBuilder messageBuilder;
+
 public:
     ClientNode(const std::string &mcast, unsigned port, unsigned int timeout, std::string folder) :
             folder(std::move(folder)),
             connection(std::make_shared<Connection>(mcast, port, timeout)),
             fds(std::vector<pollfd>(N, {-1, POLLIN, 0})),
-            uploadFiles(std::vector<FileSender>()) {}
+            uploadFiles(std::vector<FileSender>()),
+            messageBuilder(MessageBuilder()) {}
 
     void addFile(const std::string &filename, sockaddr_in addr);
 

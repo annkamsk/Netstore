@@ -88,12 +88,8 @@ public:
 
     void setTimeout(int sock);
 
-    std::string getMcast() const {
+    const std::string &getMcast() const {
         return this->mcast;
-    }
-
-    std::string getLocal() const {
-        return this->local;
     }
 
     unsigned int getTtl() const {
