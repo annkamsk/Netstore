@@ -28,16 +28,13 @@
 #include <iterator>
 #include <fcntl.h>
 
+#define my_byte unsigned char
 
 namespace fs = std::experimental::filesystem;
-
-#define my_byte unsigned char
 
 namespace Netstore {
     const static int MIN_SMPL_CMD_SIZE = 18;
     const static int MIN_CMPLX_CMD_SIZE = 26;
-    /* max SIMPL_CMD size = 10 (cmd) + 8 (seq) + 256 (max filename length) */
-    const static unsigned MAX_SMPL_CMD_SIZE = 274;
 
     const static unsigned BUFFER_LEN = 2048;
     const static unsigned MAX_UDP_PACKET_SIZE = 65507;
@@ -48,20 +45,13 @@ namespace Netstore {
     }
 }
 
-/* wypisuje informacje o blednym zakonczeniu funkcji systemowej
-i konczy dzialanie */
 extern void syserr(const char *fmt, ...);
-
-/* wypisuje informacje o bledzie i konczy dzialanie */
-extern void fatal(const char *fmt, ...);
-
-extern void info(const char *fmt, ...);
 
 class NetstoreException : public std::exception {
     std::string message;
 public:
     NetstoreException() = default;
-    NetstoreException(std::string message) : message(std::move(message)) {}
+    explicit NetstoreException(std::string message) : message(std::move(message)) {}
     const char *what() const noexcept override {
         return "ERROR: Netstore exception. ";
     }
@@ -81,7 +71,7 @@ public:
 
 class PartialSendException : public NetstoreException {
 public:
-    PartialSendException(std::string s) : NetstoreException(s) {}
+    explicit PartialSendException(std::string s) : NetstoreException(s) {}
     PartialSendException() = default;
     const char *what() const noexcept override {
         return "ERROR: Message was partially sent. ";
@@ -105,7 +95,7 @@ public:
 
 class MessageSendException : public NetstoreException {
 public:
-    MessageSendException(std::string s) : NetstoreException(s) {}
+    explicit MessageSendException(std::string s) : NetstoreException(s) {}
     MessageSendException() = default;
     const char *what() const noexcept override {
         return "ERROR: Message sending exception. ";
@@ -114,7 +104,7 @@ public:
 
 class FileException : public NetstoreException {
 public:
-    FileException(std::string s) : NetstoreException(s) {}
+    explicit FileException(std::string s) : NetstoreException(s) {}
     FileException() = default;
     const char *what() const noexcept override {
         return "ERROR: File exception. ";

@@ -154,7 +154,6 @@ void ServerNode::sendList(int sock, const ConnectionResponse &request, const std
     auto foundFiles = getFiles(message->getData());
     if (!foundFiles.empty()) {
         response->setData(getFiles(message->getData()));
-        // TODO when list greater than max UDP packet size
         connection->sendToSocket(sock, request.getCliaddr(), response);
     }
 }

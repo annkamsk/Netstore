@@ -312,7 +312,7 @@ void ClientNode::remove(const std::string &s) {
 
 void ClientNode::exit() {
     for (auto fd : fds) {
-        if (fd.fd != -1) {
+        if (fd.fd != -1 && fd.fd != 0) {
             if (downloadRequests.find(fd.fd) != downloadRequests.end()) {
                 auto request = downloadRequests.at(fd.fd);
                 fclose(request.f);

@@ -97,7 +97,7 @@ int Connection::openTCPSocket(struct sockaddr_in provider) {
 }
 
 void Connection::setReceiver() {
-    char *remote_dotted_address = this->mcast.data();
+    auto remote_dotted_address = this->mcast.data();
     remote_address.sin_family = AF_INET;
     remote_address.sin_port = htons(this->port);
     if (inet_aton(remote_dotted_address, &remote_address.sin_addr) == 0) {
@@ -130,9 +130,6 @@ ConnectionResponse Connection::readFromUDPSocket(int sock) {
                                  (struct sockaddr *) &response.getCliaddr(), &len);
     if (singleLen < 0) {
         throw NetstoreException("Timeout while waiting for connection.");
-    } else {
-//        std::cerr << "\nread " << singleLen << " bytes: " << buffer.data() << " from: "
-//                  << inet_ntoa(response.getCliaddr().sin_addr) << std::flush;
     }
     response.setBuffer(buffer);
     response.setSize(singleLen);
