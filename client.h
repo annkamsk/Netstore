@@ -49,7 +49,7 @@ private:
     std::vector<FileSender> uploadFiles;
 
     std::unordered_map<std::string, std::vector<sockaddr_in>> files{};
-    std::map<uint64_t, std::vector<sockaddr_in>, std::greater<>> memory{};
+    std::map<uint64_t, std::vector<sockaddr_in>, std::greater<uint64_t >> memory{};
     std::unordered_map<int, ClientRequest> downloadRequests;
 
     MessageBuilder messageBuilder;

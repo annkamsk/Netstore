@@ -6,7 +6,7 @@ $(shell mkdir -p $(DEPDIR) >/dev/null)
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17
+CXXFLAGS = -Wall -Wextra -std=c++11
 LDFLAGS := -L/usr/lib/x86_64-linux-gnu/ -lboost_program_options -lstdc++fs
 
 COMPILE.cc = $(CXX) $(DEPFLAGS) $(CXXFLAGS) -c
@@ -28,6 +28,8 @@ server : err.o server.o Message.o Connection.o FileSender.o netstoreserver.o
 
 client : err.o client.o Message.o Connection.o FileSender.o netstoreclient.o
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
+
+.all : server client
 
 clean:
 	-rm *.o server client
